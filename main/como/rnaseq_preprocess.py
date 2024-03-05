@@ -4,17 +4,18 @@ import os
 import re
 import sys
 from pathlib import Path
+from typing import Optional, Union
 
 import numpy as np
 import pandas as pd
 from fast_bioservices import BioDBNet, Input, Output, Taxon
 
-import como_utilities
-import rpy2_api
-from project import Configs
+from como import como_utilities
+from como import rpy2_api
+from como.project import Configs
 
 configs = Configs()
-r_file_path: Path = Path(configs.root_dir, "src", "rscripts", "generate_counts_matrix.R")
+r_file_path: Path = Path(configs.root_dir, "como", "rscripts", "generate_counts_matrix.R")
 
 
 def create_counts_matrix(context_name):
@@ -274,7 +275,6 @@ def handle_context_batch(context_names, mode, input_format: Input, taxon_id, pro
         matrix_path_all = os.path.join(matrix_output_dir, ("gene_counts_matrix_full_" + context_name + ".csv"))
         matrix_path_total = os.path.join(matrix_output_dir, ("gene_counts_matrix_total_" + context_name + ".csv"))
         matrix_path_mrna = os.path.join(matrix_output_dir, ("gene_counts_matrix_mrna_" + context_name + ".csv"))
-        matrix_path_prov = os.path.join(matrix_output_dir, provided_matrix_file)
         
         if mode == "make":
             create_counts_matrix(context_name)
@@ -313,8 +313,29 @@ def handle_context_batch(context_names, mode, input_format: Input, taxon_id, pro
         create_gene_info_file(tmatrix_files + mmatrix_files, input_format, taxon_id)
     
     else:
+        matrix_path_prov = os.path.join(matrix_output_dir, provided_matrix_file)
         matrix_files: list[str] = como_utilities.stringlist_to_list(matrix_path_prov)
         create_gene_info_file(matrix_files, input_format, taxon_id)
+
+
+def rnaseq_preprocess(context_names: str, mode: str, input_format: Input, taxon_id: Union[int, str], matrix_file: Optional[str] = None) -> None:
+    if not mode == "make" and not mode == "provide":
+        raise ValueError("mode must be either 'make' or 'provide'")
+    
+    if not input_format in [Input.ENSEMBL_GENE_ID, Input.GENE_SYMBOL, Input.GENE_ID]:
+        raise ValueError("input_format must be either 'ENSEMBL_GENE_ID', 'GENE_SYMBOL', or 'GENE_ID'")
+    
+    if not isinstance(taxon_id, int) and not taxon_id in ["human", "mouse"]:
+        raise ValueError("taxon_id must be either an integer, or accepted string ('mouse', 'human')")
+    
+
+    handle_context_batch(
+        context_names=context_names,
+        mode=mode,
+        input_format=input_format,
+        taxon_id=taxon_id,
+        provided_matrix_file=matrix_file
+    )
 
 
 def parse_args(argv):

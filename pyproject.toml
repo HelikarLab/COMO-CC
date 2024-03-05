@@ -17,9 +17,7 @@ dependencies = [
 source = "vcs"
 
 [tool.hatch.build]
-include = [
-    "main/*"
-]
+packages = ["main/como"]
 
 [tool.hatch.build.hooks.vcs]
 version-file = "_version.py"
