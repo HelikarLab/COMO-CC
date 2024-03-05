@@ -1,4 +1,34 @@
+[build-system]
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
+
+[project]
+name = "COMO"
+dynamic = ["version"]
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "fast_bioservices @ git+https://github.com/JoshLoecker/fast_bioservices",
+    "numpy",
+    "pandas",
+    "rpy2",
+]
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.build]
+include = [
+    "main/*"
+]
+
+[tool.hatch.build.hooks.vcs]
+version-file = "_version.py"
+
+[tool.hatch.metadata]
+allow-direct-references=true
+
 [tool.pytest.ini_options]
 pythonpath = [
     "main/src"
 ]
+
