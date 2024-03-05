@@ -5,11 +5,12 @@ build-backend = "hatchling.build"
 [project]
 name = "COMO"
 dynamic = ["version"]
-readme = "README.md"
+#readme = "README.md"
 requires-python = ">=3.8"
 dependencies = [
     "fast_bioservices @ git+https://github.com/JoshLoecker/fast_bioservices",
     "numpy",
+    "openpyxl",
     "pandas",
     "rpy2",
 ]
