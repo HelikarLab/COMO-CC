@@ -4,7 +4,7 @@ import sys
 # Add parent directory to path, allows us to import the "project.py" file from the parent directory
 # From: https://stackoverflow.com/a/30536516/13885200
 
-from src import project
+from como import project
 
 
 def test_config():
