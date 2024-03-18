@@ -8,9 +8,9 @@ import rpy2.robjects as ro
 from fast_bioservices import BioDBNet, Input, Output
 from rpy2.robjects import pandas2ri
 
-import instruments
-from GSEpipeline import load_gse_soft
-from instruments import AffyIO
+from como import instruments
+from como.GSEpipeline import load_gse_soft
+from como.instruments import AffyIO
 
 pandas2ri.activate()
 

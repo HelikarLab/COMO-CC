@@ -5,7 +5,7 @@ import numpy as np
 import GEOparse
 import urllib.request
 import tarfile
-from instruments import AffyIO
+from como.instruments import AffyIO
 
 
 # Input: Extract Gene Info from GEO DataSets
