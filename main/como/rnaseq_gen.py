@@ -1,21 +1,24 @@
 #!/usr/bin/python3
 
 import argparse
+from enum import Enum
 import os
 import re
 import sys
 from pathlib import Path
+from typing import Optional
 
 import pandas as pd
-import rpy2_api
-from project import Configs
+
+from como import rpy2_api
+from como.project import Configs
 from rpy2.robjects import pandas2ri
 
 # enable r to py conversion
 pandas2ri.activate()
 
 configs = Configs()
-r_file_path = Path(configs.root_dir, "src", "rscripts", "rnaseq.R")
+r_file_path = Path(configs.root_dir, "como", "rscripts", "rnaseq.R")
 
 
 def load_rnaseq_tests(filename, context_name, lib_type):
@@ -146,6 +149,59 @@ def handle_context_batch(
         
         print(f"Results saved at:\t{rnaseq_output_filepath}")
 
+
+class Technique(Enum):
+    ZFPKM = "zfpkm"
+    TPM = "quantile"
+    CPM = "cpm"
+
+def rnaseq_gen(
+    config_filename: str,
+    replicate_ratio: float = 0.5,
+    batch_ratio: float = 0.5,
+    replicate_ratio_high: float = 1.0,
+    batch_ratio_high: float = 1.0,
+    technique: Technique = Technique.TPM,
+    cut_off: Optional[int] = None,
+    prep: Optional[str] = "",
+) -> None:
+    if not technique in Technique:
+        raise ValueError(f"Technique must be one of {Technique}") 
+    
+    if technique == Technique.TPM:
+        if cut_off is None:
+            cut_off = 25
+        
+        if cut_off < 1 or cut_off > 100:
+            raise ValueError("Quantile must be between 1 - 100")
+
+    elif technique == Technique.CPM:
+        if cut_off is not None and cut_off < 0:
+            raise ValueError("Cutoff must be greater than 0")
+
+        if cut_off is None:
+            cut_off = "default"
+    elif technique == Technique.ZFPKM:
+        if cut_off is not None and (cut_off < -3 or cut_off > -2):
+            raise ValueError("Cutoff must be between -3 and -2")
+
+        if cut_off is None:
+            cut_off = "default"
+
+    prep = prep.replace(" ", "")
+
+    handle_context_batch(
+        config_filename,
+        replicate_ratio,
+        batch_ratio,
+        replicate_ratio_high,
+        batch_ratio_high,
+        technique.value,
+        cut_off,
+        cut_off,
+        cut_off,
+        prep,
+    )
 
 def main(argv):
     """

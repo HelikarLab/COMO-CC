@@ -137,8 +137,8 @@ calculate_fpkm <- function(sample_metrics) {
         layout <- sample_metrics[[i]][["Layout"]] # get layout
         
         # normalize with fpkm if paired, rpkm if single end, kill if something else is specified
-        stopifnot(layout[1] == "paired-end" || layout == "single-end")
-        if (layout == "paired-end") { # fpkm
+        stopifnot(layout[1] == "paired-end" || layout[1] == "single-end")
+        if (layout[1] == "paired-end") { # fpkm
             count_matrix <- sample_metrics[[i]][["CountMatrix"]]
             gene_size <- sample_metrics[[i]][["GeneSizes"]]
             mean_fragment_lengths <- sample_metrics[[i]][["FragmentLengths"]]

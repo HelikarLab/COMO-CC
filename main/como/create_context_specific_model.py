@@ -1,8 +1,10 @@
 #!/usr/bin/python3
 
+from enum import Enum
 import os
 import re
 import sys
+from typing import Optional
 import cobra
 from cobra import Model
 import argparse
@@ -18,8 +20,8 @@ from troppo.methods.reconstruction.tINIT import tINIT, tINITProperties
 from troppo.methods.reconstruction.gimme import GIMME, GIMMEProperties
 from troppo.methods.reconstruction.fastcore import FASTcore, FastcoreProperties
 
-from project import Configs
-from como_utilities import stringlist_to_list, split_gene_expression_data, Compartments
+from como.project import Configs
+from como.como_utilities import stringlist_to_list, split_gene_expression_data, Compartments
 
 sys.setrecursionlimit(1500)  # for re.search
 
@@ -366,7 +368,7 @@ def map_expression_to_rxn(model_cobra, gene_expression_file, recon_algorithm, lo
     return expression_rxns, expr_vector
 
 
-def create_context_specific_model(
+def _create_context_specific_model(
     general_model_file,
     gene_expression_file,
     recon_algorithm,
@@ -535,6 +537,201 @@ def create_context_specific_model(
     ]
     
     return context_model_cobra, exp_idx_list, infeasible_df
+
+
+class Algorithm(Enum):
+    GIMME = "GIMME"
+    FASTCORE = "FASTCORE"
+    IMAT = "IMAT"
+    TINIT = "TINIT"
+
+
+class Solver(Enum):
+    GLPK = "GLPK"
+    GUROBI = "GUROBI"
+
+
+def create_context_specific_model(
+    context_name: str,
+    reference_model: str,
+    genes_file: str,
+    objective: str = "biomass_reaction",
+    boundary_rxns_filepath: Optional[str] = None,
+    exclude_rxns_filepath: Optional[str] = None,
+    force_rxns_filepath: Optional[str] = None,
+    algorithm: Algorithm = Algorithm.GIMME,
+    low_threshold: float = -5,
+    high_threshold: float = -3,
+    solver: Solver = Solver.GLPK,
+    output_filetypes: list[str] = ["mat"],
+):
+    if not os.path.exists(reference_model):
+        raise FileNotFoundError(f"Reference model not found at {reference_model}")
+    
+    if not os.path.exists(genes_file):
+        raise FileNotFoundError(f"Active genes file not found at {genes_file}")
+    
+    print(f"Active Genes: {genes_file}")
+    
+    boundary_rxns = []
+    boundary_rxns_upper: list[float] = []
+    boundary_rxns_lower: list[float] = []
+    
+    if boundary_rxns_filepath:
+        boundary_rxns_filepath: Path = Path(boundary_rxns_filepath)
+        
+        print(f"Boundary Reactions: {str(boundary_rxns_filepath)}")
+        if boundary_rxns_filepath.suffix == ".csv":
+            df: pd.DataFrame = pd.read_csv(boundary_rxns_filepath, header=0, sep=",")
+        elif boundary_rxns_filepath.suffix in [".xlsx", ".xls"]:
+            df: pd.DataFrame = pd.read_excel(boundary_rxns_filepath, header=0)
+        else:
+            raise FileNotFoundError(
+                f"Boundary reactions file not found! Must be a csv or Excel file. Searching for: {boundary_rxns_filepath}")
+        
+        # convert all columns to lowercase
+        df.columns = [column.lower() for column in df.columns]
+        
+        # Make sure the columns are named correctly. They should be "Reaction", "Abbreviation", "Compartment", "Minimum Reaction Rate", and "Maximum Reaction Rate"
+        for column in df.columns:
+            if column not in ["reaction", "abbreviation", "compartment", "minimum reaction rate",
+                              "maximum reaction rate"]:
+                raise ValueError(
+                    f"Boundary reactions file must have columns named 'Reaction', 'Abbreviation', 'Compartment', 'Minimum Reaction Rate', and 'Maximum Reaction Rate'. Found: {column}")
+        
+        reaction_type: list[str] = df["reaction"].tolist()
+        reaction_abbreviation: list[str] = df["abbreviation"].tolist()
+        reaction_compartment: list[str] = df["compartment"].tolist()
+        boundary_rxns_lower = df["minimum reaction rate"].tolist()
+        boundary_rxns_upper = df["maximum reaction rate"].tolist()
+        
+        reaction_formula: list[str] = []
+        for i in range(len(reaction_type)):
+            current_type: str = reaction_type[i]
+            temp_reaction: str = ""
+            
+            match current_type.lower():
+                case "exchange":
+                    temp_reaction += "EX_"
+                case "demand":
+                    temp_reaction += "DM_"
+                case "sink":
+                    temp_reaction += "SK_"
+            
+            shorthand_compartment = Compartments.get(reaction_compartment[i])
+            temp_reaction += f"{reaction_abbreviation[i]}[{shorthand_compartment}]"
+            boundary_rxns.append(temp_reaction)
+            # reaction_formula.append(temp_reaction)
+        
+        del df
+    
+    exclude_rxns = []
+    if exclude_rxns_filepath:
+        exclude_rxns_filepath: Path = Path(exclude_rxns_filepath)
+
+        print(f"Reading {exclude_rxns_filepath} for exclude reactions")
+        if exclude_rxns_filepath.suffix == ".csv":
+            df = pd.read_csv(exclude_rxns_filepath, header=0)
+        elif exclude_rxns_filepath.suffix == ".xlsx" or exclude_rxns_filepath.suffix == ".xls":
+            df = pd.read_excel(exclude_rxns_filepath, header=0)
+        else:
+            raise ValueError("exclude_rxns_filepath must be a path to a csv or xlsx file with one column.")
+        
+        exclude_rxns = df["Abbreviation"].tolist()
+    
+    force_rxns = []
+    if force_rxns_filepath:
+        force_rxns_filepath: Path = Path(force_rxns_filepath)
+
+        print(f"Force Reactions: {force_rxns_filepath}")
+        if force_rxns_filepath.suffix == ".csv":
+            df = pd.read_csv(force_rxns_filepath, header=0)
+        elif force_rxns_filepath.suffix == ".xlsx" or force_rxns_filepath.suffix == ".xls":
+            df = pd.read_excel(force_rxns_filepath, header=0)
+        else:
+            raise ValueError(
+                "--force-reactions-file must be a path to a csv or xlsx file with one column."
+            )
+        force_rxns = df["Abbreviation"].tolist()
+    
+    # Assert output types are valid
+    for output_type in output_filetypes:
+        if output_type not in ["xml", "mat", "json"]:
+            raise ValueError(f"Output file type {output_type} not recognized. Must be one of: 'xml', 'mat', 'json'")
+    
+    if algorithm not in Algorithm:
+        raise ValueError(
+            f"Algorithm {algorithm} not supported. Please use one of: GIMME, FASTCORE, or IMAT"
+        )
+    
+    if solver not in Solver:
+        print(f"Solver {solver} not supported. Please use 'GLPK' or 'GUROBI'")
+    
+    print(f"Creating '{context_name}' model using '{algorithm}' reconstruction and '{solver}' solver")
+    context_model, core_list, infeas_df = _create_context_specific_model(
+        reference_model,
+        genes_file,
+        algorithm.value,
+        objective,
+        exclude_rxns,
+        force_rxns,
+        boundary_rxns,
+        boundary_rxns_lower,
+        boundary_rxns_upper,
+        solver.value,
+        context_name,
+        low_threshold,
+        high_threshold
+    )
+    
+    infeas_df.to_csv(
+        os.path.join(
+            configs.root_dir,
+            "data",
+            "results",
+            context_name,
+            context_name + "_infeasible_rxns.csv",
+        ),
+        index=False,
+    )
+    
+    if algorithm == Algorithm.FASTCORE:
+        pd.DataFrame(core_list).to_csv(
+            os.path.join(
+                configs.root_dir,
+                "data",
+                "results",
+                context_name,
+                context_name + "_core_rxns.csv",
+            ),
+            index=False,
+        )
+    
+    output_directory = os.path.join(configs.data_dir, "results", context_name)
+    if "mat" in output_filetypes:
+        cobra.io.save_matlab_model(
+            context_model,
+            os.path.join(output_directory, f"{context_name}_SpecificModel_{algorithm.value}.mat"),
+        )
+    if "xml" in output_filetypes:
+        cobra.io.write_sbml_model(
+            context_model,
+            os.path.join(output_directory, f"{context_name}_SpecificModel_{algorithm.value}.xml"),
+        )
+    if "json" in output_filetypes:
+        cobra.io.save_json_model(
+            context_model,
+            os.path.join(output_directory, f"{context_name}_SpecificModel_{algorithm.value}.json"),
+        )
+    
+    # os.path.join(configs.datadir, "results", context_name, outputfile)
+    print("")
+    print(f"Saved output file to {output_directory}")
+    print(f"Number of Genes: {len(context_model.genes):,}")
+    print(f"Number of Metabolites: {len(context_model.metabolites):,}")
+    print(f"Number of Reactions: {len(context_model.reactions):,}")
+    print("\nModel successfully created!")
+
 
 
 def print_filetype_help():
@@ -856,7 +1053,7 @@ def main(argv):
         sys.exit(2)
     
     print(f"Creating '{context_name}' model using '{recon_alg}' reconstruction and '{solver}' solver")
-    context_model, core_list, infeas_df = create_context_specific_model(
+    context_model, core_list, infeas_df = _create_context_specific_model(
         reference_model,
         genefile,
         recon_alg,

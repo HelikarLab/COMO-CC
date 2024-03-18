@@ -9,16 +9,16 @@ from rpy2.robjects import pandas2ri
 from rpy2.robjects.packages import importr
 from rpy2.robjects.packages import SignatureTranslatedAnonymousPackage
 
-import rpy2_api
-import project
+from como import rpy2_api
+from como import project
 
 configs = project.Configs()
 
 affy_r_filepath = Path(os.path.join(configs.src_dir, "rscripts", "fitAffy.R"))
 agilent_r_filepath = Path(os.path.join(configs.src_dir, "rscripts", "fitAgilent.R"))
 
-affy_r = open(affy_r_filepath, "r").read()
-agilent_r = open(agilent_r_filepath, "r").read()
+# affy_r = open(affy_r_filepath, "r").read()
+# agilent_r = open(agilent_r_filepath, "r").read()
 
 
 class RObject:

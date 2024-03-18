@@ -5,10 +5,10 @@ import os
 import sys
 
 # from GSEpipelineFast import *
-import GSEpipelineFast
+from como import GSEpipelineFast
 import numpy as np
 import pandas as pd
-from project import Configs
+from como.project import Configs
 from sqlalchemy import Column, Float, Integer, String, create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import load_only, sessionmaker

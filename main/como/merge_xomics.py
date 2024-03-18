@@ -1,21 +1,23 @@
 #!/usr/bin/python3
 
+import argparse
+from enum import Enum
+import json
 import os
 import re
 import sys
-import json
-import argparse
-import pandas as pd
-from pathlib import Path
 from collections import Counter
+from pathlib import Path
 
-import rpy2_api
-import rnaseq_gen
-import microarray_gen
-import proteomics_gen
-from project import Configs
-from como_utilities import split_gene_expression_data
-from multi_bioservices import db2db, InputDatabase, OutputDatabase
+from como import microarray_gen
+import pandas as pd
+from fast_bioservices import BioDBNet, Input, Output
+
+from como import proteomics_gen
+from como import rnaseq_gen
+from como import rpy2_api
+from como.como_utilities import split_gene_expression_data
+from como.project import Configs
 
 configs = Configs()
 
@@ -64,10 +66,10 @@ def get_transcriptmoic_details(merged_df: pd.DataFrame) -> pd.DataFrame:
     - Gene Symbol
     - Gene Name
     - ENTREZ_GENE_ID
-    
+
     The resulting dataframe will have its columns created in the order listed above
     It will return a pandas dataframe with this information
-    
+
     :param merged_df: A dataframe containing all the transcriptomic and proteomic data after determining which genes are active
     :return: A dataframe with the above-listed columns
     """
@@ -107,13 +109,14 @@ def get_transcriptmoic_details(merged_df: pd.DataFrame) -> pd.DataFrame:
     else:
         transcriptomic_df: pd.DataFrame = merged_df.copy()
     
-    gene_details: pd.DataFrame = db2db(
+    biodbnet = BioDBNet()
+    gene_details: pd.DataFrame = biodbnet.db2db(
         input_values=transcriptomic_df.index.astype(str).values.tolist(),
-        input_db=InputDatabase.GENE_ID,
+        input_db=Input.GENE_ID,
         output_db=[
-            OutputDatabase.GENE_SYMBOL,
-            OutputDatabase.ENSEMBL_GENE_INFO,
-            OutputDatabase.GENE_INFO,
+            Output.GENE_SYMBOL,
+            Output.ENSEMBL_GENE_INFO,
+            Output.GENE_INFO,
         ]
     )
     gene_details["entrez_gene_id"] = gene_details.index
@@ -160,7 +163,7 @@ def get_transcriptmoic_details(merged_df: pd.DataFrame) -> pd.DataFrame:
     return gene_details
 
 
-def merge_xomics(
+def _merge_xomics(
     context_name: str,
     expression_requirement,
     microarray_file=None,
@@ -428,7 +431,7 @@ def handle_context_batch(
                   "Will be force changed to 1 to prevent output from having 0 active genes. ")
             exp_req = 1
         
-        files_dict = merge_xomics(
+        files_dict = _merge_xomics(
             context_name,
             expression_requirement=exp_req,
             microarray_file=microarray_file,
@@ -446,6 +449,65 @@ def handle_context_batch(
         json.dump(dict_list, fp)
     
     return
+
+class AdjustMethod(Enum):
+    PROGRESSIVE = "progressive"
+    REGRESSIVE = "regressive"
+    FLAT = "flat"
+    CUSTOM = "custom"
+
+def merge_xomics(
+    microarray_file: str = None,
+    trnaseq_file: str = None,
+    mrnaseq_file: str = None,
+    scrnaseq_file: str = None,
+    proteomics_file: str = None,
+    tweight: float = 1,
+    mweight: float = 1,
+    sweight: float = 1,
+    pweight: float = 2,
+    expression_requirement: int = None,
+    adjust_method: AdjustMethod = AdjustMethod.FLAT,
+    no_hc: bool = False,
+    no_na: bool = False,
+    custom_file: str = None,
+    merge_distro: bool = False,
+    keep_gene_score: bool = True
+):
+    # read custom expression requirment file if used
+    if custom_file is not None:
+        custom_filepath = os.path.join(configs.data_dir, custom_file)
+        custom_df = pd.read_excel(custom_filepath, sheet_name=0)
+        custom_df.columns = ["context", "req"]
+    else:
+        custom_df = pd.DataFrame([])
+
+    if expression_requirement is None:
+        expression_requirement = sum(1 for test in [microarray_file, trnaseq_file, mrnaseq_file, scrnaseq_file, proteomics_file] if test is not None)
+    elif expression_requirement < 1:
+        raise ValueError("Expression requirement must be at least 1!")
+    
+    if adjust_method not in AdjustMethod:
+        raise ValueError("Adjust method must be either 'progressive', 'regressive', 'flat', or 'custom'")
+    
+    handle_context_batch(
+        microarray_file,
+        trnaseq_file,
+        mrnaseq_file,
+        scrnaseq_file,
+        proteomics_file,
+        tweight,
+        mweight,
+        sweight,
+        pweight,
+        expression_requirement,
+        adjust_method.value,
+        no_hc,
+        no_na,
+        custom_df,
+        merge_distro,
+        keep_gene_score
+    )
 
 
 def main(argv):
