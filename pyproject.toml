@@ -8,11 +8,16 @@ dynamic = ["version"]
 #readme = "README.md"
 requires-python = ">=3.8"
 dependencies = [
+    "cobra",
     "fast_bioservices @ git+https://github.com/JoshLoecker/fast_bioservices",
+    "cobamp @ git+https://github.com/JoshLoecker/cobamp.git",
+    "geoparse",
     "numpy",
     "openpyxl",
     "pandas",
     "rpy2",
+    "sqlalchemy",
+    "troppo",
 ]
 [tool.hatch.version]
 source = "vcs"
