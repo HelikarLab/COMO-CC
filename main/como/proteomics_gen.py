@@ -5,11 +5,11 @@ import sys
 import os
 import pandas as pd
 import numpy as np
-import instruments
-from project import Configs
+from como import instruments
+from como.project import Configs
 from pathlib import Path
 
-import rpy2_api
+from como import rpy2_api
 
 configs = Configs()
 
@@ -18,7 +18,7 @@ configs = Configs()
 # string = f.read()
 # f.close()
 # protein_transform_io = SignatureTranslatedAnonymousPackage(string, "protein_transform_io")
-r_file_path = Path(configs.root_dir, "src", "rscripts", "protein_transform.R")
+r_file_path = Path(configs.root_dir, "como", "rscripts", "protein_transform.R")
 
 
 # Load Proteomics
@@ -196,11 +196,68 @@ def load_proteomics_tests(filename, context_name):
         return load_empty_dict()
 
 
-def proteomics_gen(TEMP):
-    """
-    Description
-    """
-    return "TEMP"
+def proteomics_gen(
+    config_file: str, 
+    rep_ratio: float = 0.5,
+    group_ratio: float = 0.5,
+    hi_rep_ratio: float = 0.5,
+    hi_group_ratio: float = 0.5,
+    quantile: int = 25
+    ):
+    if not config_file:
+        raise ValueError("Config file must be provided")
+
+    if quantile < 0 or quantile > 100:
+        raise ValueError("Quantile must be an integer from 0 to 100")
+    quantile /= 100
+    
+    prot_config_filepath = os.path.join(
+        configs.root_dir, "data", "config_sheets", config_file 
+    )
+    print('Config file is at "{}"'.format(prot_config_filepath))
+    
+    xl = pd.ExcelFile(prot_config_filepath)
+    sheet_names = xl.sheet_names
+    
+    for context_name in sheet_names:
+        datafilename = "".join(["protein_abundance_", context_name, ".csv"])
+        config_sheet = pd.read_excel(prot_config_filepath, sheet_name=context_name)
+        groups = config_sheet["Group"].unique().tolist()
+        
+        for group in groups:
+            group_idx = np.where([True if g == group else False for g in config_sheet["Group"].tolist()])
+            cols = np.take(config_sheet["SampleName"].to_numpy(), group_idx).ravel().tolist() + [
+                "Gene Symbol",
+                "uniprot"
+            ]
+            cols = np.take(config_sheet["SampleName"].to_numpy(), group_idx).ravel().tolist() + ["Gene Symbol"]
+            
+            proteomics_data = load_proteomics_data(datafilename, context_name)
+            proteomics_data = proteomics_data.loc[:, cols]
+            
+            sym2id = load_gene_symbol_map(
+                gene_symbols=proteomics_data["Gene Symbol"].tolist(),
+                filename="proteomics_entrez_map.csv"
+            )
+            
+            # map gene symbol to ENTREZ_GENE_ID
+            proteomics_data.dropna(subset=["Gene Symbol"], inplace=True)
+            
+            try:
+                proteomics_data.drop(columns=["uniprot"], inplace=True)
+            
+            except KeyError:
+                pass
+            
+            proteomics_data = proteomics_data.groupby(["Gene Symbol"]).agg("max")
+            proteomics_data["ENTREZ_GENE_ID"] = sym2id["Gene ID"]
+            proteomics_data.dropna(subset=["ENTREZ_GENE_ID"], inplace=True)
+            proteomics_data.set_index("ENTREZ_GENE_ID", inplace=True)
+            
+            # save proteomics data by test
+            abundance_to_bool_group(context_name, group, proteomics_data, rep_ratio, hi_rep_ratio, quantile)
+        
+        to_bool_context(context_name, group_ratio, hi_group_ratio, groups)
 
 
 def main(argv):
@@ -275,55 +332,9 @@ def main(argv):
     group_ratio = args.group_ratio
     hi_rep_ratio = args.hi_rep_ratio
     hi_group_ratio = args.hi_group_ratio
-    quantile = args.quantile / 100
-    
-    prot_config_filepath = os.path.join(
-        configs.root_dir, "data", "config_sheets", suppfile
-    )
-    print('Config file is at "{}"'.format(prot_config_filepath))
-    
-    xl = pd.ExcelFile(prot_config_filepath)
-    sheet_names = xl.sheet_names
-    
-    for context_name in sheet_names:
-        datafilename = "".join(["protein_abundance_", context_name, ".csv"])
-        config_sheet = pd.read_excel(prot_config_filepath, sheet_name=context_name)
-        groups = config_sheet["Group"].unique().tolist()
-        
-        for group in groups:
-            group_idx = np.where([True if g == group else False for g in config_sheet["Group"].tolist()])
-            cols = np.take(config_sheet["SampleName"].to_numpy(), group_idx).ravel().tolist() + [
-                "Gene Symbol",
-                "uniprot"
-            ]
-            cols = np.take(config_sheet["SampleName"].to_numpy(), group_idx).ravel().tolist() + ["Gene Symbol"]
-            
-            proteomics_data = load_proteomics_data(datafilename, context_name)
-            proteomics_data = proteomics_data.loc[:, cols]
-            
-            sym2id = load_gene_symbol_map(
-                gene_symbols=proteomics_data["Gene Symbol"].tolist(),
-                filename="proteomics_entrez_map.csv"
-            )
-            
-            # map gene symbol to ENTREZ_GENE_ID
-            proteomics_data.dropna(subset=["Gene Symbol"], inplace=True)
-            
-            try:
-                proteomics_data.drop(columns=["uniprot"], inplace=True)
-            
-            except KeyError:
-                pass
-            
-            proteomics_data = proteomics_data.groupby(["Gene Symbol"]).agg("max")
-            proteomics_data["ENTREZ_GENE_ID"] = sym2id["Gene ID"]
-            proteomics_data.dropna(subset=["ENTREZ_GENE_ID"], inplace=True)
-            proteomics_data.set_index("ENTREZ_GENE_ID", inplace=True)
-            
-            # save proteomics data by test
-            abundance_to_bool_group(context_name, group, proteomics_data, rep_ratio, hi_rep_ratio, quantile)
-        
-        to_bool_context(context_name, group_ratio, hi_group_ratio, groups)
+    quantile = args.quantile
+
+    proteomics_gen(suppfile, rep_ratio, group_ratio, hi_rep_ratio, hi_group_ratio, quantile)
     
     return True
 
