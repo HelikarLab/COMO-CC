@@ -6,19 +6,19 @@ import os
 import pandas as pd
 import numpy as np
 from como import instruments
-from como.project import Configs
+from como.project import Config
 from pathlib import Path
 
 from como import rpy2_api
 
-configs = Configs()
+config = Config()
 
 # read and translate R functions
 # f = open(os.path.join(configs.rootdir, "src", "rscripts", "protein_transform.R"), "r")
 # string = f.read()
 # f.close()
 # protein_transform_io = SignatureTranslatedAnonymousPackage(string, "protein_transform_io")
-r_file_path = Path(configs.root_dir, "como", "rscripts", "protein_transform.R")
+r_file_path = Path(__file__).parent / "rscripts" / "protein_transform.R"
 
 
 # Load Proteomics
@@ -26,7 +26,7 @@ def load_proteomics_data(datafilename, context_name):
     """
     Add description......
     """
-    dataFullPath = os.path.join(configs.root_dir, "data", "data_matrices", context_name, datafilename)
+    dataFullPath = os.path.join(config.data_dir, "data_matrices", context_name, datafilename)
     print('Data matrix is at "{}"'.format(dataFullPath))
     
     if os.path.isfile(dataFullPath):
@@ -65,7 +65,7 @@ def load_gene_symbol_map(gene_symbols, filename="proteomics_entrez_map.csv"):
     """
     Add descirption....
     """
-    filepath = os.path.join(configs.root_dir, "data", "proteomics_entrez_map.csv")
+    filepath = os.path.join(config.data_dir, "proteomics_entrez_map.csv")
     if os.path.isfile(filepath):
         sym2id = pd.read_csv(filepath, index_col="Gene Symbol")
     else:
@@ -80,13 +80,12 @@ def abundance_to_bool_group(context_name, group_name, abundance_matrix, rep_rati
     """
     Descrioption....
     """
-    output_dir = os.path.join(configs.root_dir, "data", "results", context_name, "proteomics")
+    output_dir = os.path.join(config.result_dir, context_name, "proteomics")
     os.makedirs(output_dir, exist_ok=True)
     
     # write group abundances to individual files
     abundance_filepath = os.path.join(
-        configs.data_dir,
-        "results",
+        config.result_dir,
         context_name,
         "proteomics",
         "".join(["protein_abundance_", group_name, ".csv"])
@@ -122,7 +121,7 @@ def abundance_to_bool_group(context_name, group_name, abundance_matrix, rep_rati
 
 
 def to_bool_context(context_name, group_ratio, hi_group_ratio, group_names):
-    output_dir = os.path.join(configs.root_dir, "data", "results", context_name, "proteomics")
+    output_dir = os.path.join(config.result_dir, context_name, "proteomics")
     merged_df = pd.DataFrame(columns=["ENTREZ_GENE_ID", "expressed", "high"])
     merged_df.set_index(["ENTREZ_GENE_ID"], inplace=True)
     merged_hi_df = merged_df
@@ -159,8 +158,7 @@ def load_proteomics_tests(filename, context_name):
     
     def load_empty_dict():
         savepath = os.path.join(
-            configs.root_dir,
-            "data",
+            config.data_dir,
             "data_matrices",
             "placeholder",
             "placeholder_empty_data.csv",
@@ -171,14 +169,14 @@ def load_proteomics_tests(filename, context_name):
     if not filename or filename == "None":  # if not using proteomics load empty dummy data matrix
         return load_empty_dict()
     
-    inquiry_full_path = os.path.join(configs.root_dir, "data", "config_sheets", filename)
+    inquiry_full_path = os.path.join(config.data_dir, "config_sheets", filename)
     if not os.path.isfile(inquiry_full_path):  # check that config file exists
         print("Error: file not found {}".format(inquiry_full_path))
         sys.exit()
     
     filename = "Proteomics_{}.csv".format(context_name)
     fullsavepath = os.path.join(
-        configs.root_dir, "data", "results", context_name, "proteomics", filename
+        config.result_dir, context_name, "proteomics", filename
     )
     if os.path.isfile(fullsavepath):
         data = pd.read_csv(fullsavepath, index_col="ENTREZ_GENE_ID")
@@ -212,7 +210,7 @@ def proteomics_gen(
     quantile /= 100
     
     prot_config_filepath = os.path.join(
-        configs.root_dir, "data", "config_sheets", config_file 
+        config.data_dir, "config_sheets", config_file 
     )
     print('Config file is at "{}"'.format(prot_config_filepath))
     
