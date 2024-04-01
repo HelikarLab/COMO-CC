@@ -2,7 +2,7 @@ import os
 import pandas as pd
 import rpy2.robjects as ro
 import time
-from bioservices import BioDBNet
+from fast_bioservices import BioDBNet
 from pathlib import Path
 
 from rpy2.robjects import pandas2ri
