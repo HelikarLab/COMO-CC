@@ -17,7 +17,6 @@ from rpy2.robjects import pandas2ri
 # enable r to py conversion
 pandas2ri.activate()
 
-config = Config()
 r_file_path = Path(__file__).parent /  "rscripts" / "rnaseq.R"
 
 
@@ -25,6 +24,7 @@ def load_rnaseq_tests(filename, context_name, lib_type):
     """
     Load rnaseq results returning a dictionary of test (context, context, cell, etc ) names and rnaseq expression data
     """
+    config = Config()
     
     def load_dummy_dict():
         savepath = os.path.join(
@@ -96,6 +96,7 @@ def handle_context_batch(
     Handle iteration through each context type and create rnaseq expression file by calling rnaseq.R
     """
     
+    config = Config()
     rnaseq_config_filepath = os.path.join(
         config.data_dir, "config_sheets", config_filename
     )

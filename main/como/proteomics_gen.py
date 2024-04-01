@@ -11,7 +11,6 @@ from pathlib import Path
 
 from como import rpy2_api
 
-config = Config()
 
 # read and translate R functions
 # f = open(os.path.join(configs.rootdir, "src", "rscripts", "protein_transform.R"), "r")
@@ -26,6 +25,7 @@ def load_proteomics_data(datafilename, context_name):
     """
     Add description......
     """
+    config = Config()
     dataFullPath = os.path.join(config.data_dir, "data_matrices", context_name, datafilename)
     print('Data matrix is at "{}"'.format(dataFullPath))
     
@@ -65,6 +65,7 @@ def load_gene_symbol_map(gene_symbols, filename="proteomics_entrez_map.csv"):
     """
     Add descirption....
     """
+    config = Config()
     filepath = os.path.join(config.data_dir, "proteomics_entrez_map.csv")
     if os.path.isfile(filepath):
         sym2id = pd.read_csv(filepath, index_col="Gene Symbol")
@@ -80,6 +81,7 @@ def abundance_to_bool_group(context_name, group_name, abundance_matrix, rep_rati
     """
     Descrioption....
     """
+    config = Config()
     output_dir = os.path.join(config.result_dir, context_name, "proteomics")
     os.makedirs(output_dir, exist_ok=True)
     
@@ -121,6 +123,7 @@ def abundance_to_bool_group(context_name, group_name, abundance_matrix, rep_rati
 
 
 def to_bool_context(context_name, group_ratio, hi_group_ratio, group_names):
+    config = Config()
     output_dir = os.path.join(config.result_dir, context_name, "proteomics")
     merged_df = pd.DataFrame(columns=["ENTREZ_GENE_ID", "expressed", "high"])
     merged_df.set_index(["ENTREZ_GENE_ID"], inplace=True)
@@ -155,6 +158,7 @@ def load_proteomics_tests(filename, context_name):
     """
     Description....
     """
+    config = Config()
     
     def load_empty_dict():
         savepath = os.path.join(
@@ -202,6 +206,7 @@ def proteomics_gen(
     hi_group_ratio: float = 0.5,
     quantile: int = 25
     ):
+    config = Config()
     if not config_file:
         raise ValueError("Config file must be provided")
 

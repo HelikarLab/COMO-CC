@@ -14,7 +14,6 @@ from como import como_utilities
 from como import rpy2_api
 from como.project import Config 
 
-config = Config()
 r_file_path: Path = Path(__file__).parent / "rscripts" / "generate_counts_matrix.R"
 
 
@@ -23,6 +22,7 @@ def create_counts_matrix(context_name):
     Create a counts matrix by reading gene counts tables in COMO_input/<context name>/<study number>/geneCounts/
     Uses R in backend (generate_counts_matrix.R)
     """
+    config = Config()
     input_dir = os.path.join(config.data_dir, 'COMO_input', context_name)
     print(f"Looking for STAR gene count tables in '{input_dir}'")
     matrix_output_dir = os.path.join(config.data_dir, 'data_matrices', context_name)
@@ -39,6 +39,7 @@ def create_config_df(context_name):
     based on the gene counts matrix. If using zFPKM normalization technique, fetch mean fragment lengths from
     /work/data/COMO_input/<context name>/<study number>/fragmentSizes/
     """
+    config = Config()
     gene_counts_glob = os.path.join(config.data_dir, "COMO_input", context_name, "geneCounts", "*", "*.tab")
     gene_counts_files = glob.glob(gene_counts_glob, recursive=True)
     
@@ -211,6 +212,7 @@ def create_gene_info_file(matrix_file_list: list[str], input_format: Input, taxo
     Create gene info file for specified context by reading first column in its count matrix file at
      results/<context name>/gene_info_<context name>.csv
     """
+    config = Config()
     
     print("Fetching gene info")
     gene_info_file = os.path.join(config.data_dir, "gene_info.csv")
@@ -232,7 +234,7 @@ def create_gene_info_file(matrix_file_list: list[str], input_format: Input, taxo
         if i.value != input_format.value
     ]
     
-    biodbnet = BioDBNet()
+    biodbnet = BioDBNet(max_workers=1)
     gene_info = biodbnet.db2db(
         input_values=genes,
         input_db=input_format,
@@ -253,6 +255,7 @@ def handle_context_batch(context_names, mode, input_format: Input, taxon_id, pro
     """
     Handle iteration through each context type and create files according to flag used (config, matrix, info)
     """
+    config = Config()
     trnaseq_config_filename = os.path.join(config.config_dir, "trnaseq_data_inputs_auto.xlsx")
     mrnaseq_config_filename = os.path.join(config.config_dir, "mrnaseq_data_inputs_auto.xlsx")
     

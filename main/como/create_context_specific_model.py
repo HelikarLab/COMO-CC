@@ -25,7 +25,6 @@ from como.como_utilities import stringlist_to_list, split_gene_expression_data, 
 
 sys.setrecursionlimit(1500)  # for re.search
 
-config = Config()
 
 
 def correct_bracket(rule: str, name: str) -> str:
@@ -254,6 +253,7 @@ def seed_fastcore(cobra_model, s_matrix, lb, ub, exp_idx_list, solver):
 def seed_imat(
     cobra_model, s_matrix, lb, ub, expr_vector, expr_thesh, idx_force, context_name
 ):
+    config = Config()
     expr_vector = np.array(expr_vector)
     properties = IMATProperties(
         exp_vector=expr_vector,
@@ -389,6 +389,7 @@ def _create_context_specific_model(
     file. Metabolite exchange (media), sinks, and demands are determined from exchanges file. Reactions can also be
     force excluded even if they meet GPR association requirements using the force exclude file.
     """
+    config = Config()
     if general_model_file[-4:] == ".mat":
         cobra_model = cobra.io.load_matlab_model(general_model_file)
     elif general_model_file[-4:] == ".xml":
@@ -565,6 +566,7 @@ def create_context_specific_model(
     solver: Solver = Solver.GLPK,
     output_filetypes: list[str] = ["mat"],
 ):
+    config = Config()
     if not os.path.exists(reference_model):
         raise FileNotFoundError(f"Reference model not found at {reference_model}")
     
@@ -1030,6 +1032,7 @@ def main(argv):
                 + "causes the model to be infeasible)."
             )
             sys.exit()
+    config = Config()
     
     # Assert output types are valid
     for output_type in output_filetypes:

@@ -19,7 +19,6 @@ from como import rpy2_api
 from como.como_utilities import split_gene_expression_data
 from como.project import Config
 
-config = Config()
 
 # enable r to py conversion
 # pandas2ri.activate()
@@ -189,6 +188,7 @@ def _merge_xomics(
     :param expression_requirement: integer, minimum number of provided sources with active gene for a it to be in model
     :return: dictionary where keys are contexts, (tissue name, control type etc) and values are expression tables
     """
+    config = Config()
     print(f"Merging data for {context_name}")
     # load data for each source if it exists. IF not load an empty dummy dataset
     microarray = microarray_gen.load_microarray_tests(filename=microarray_file, context_name=context_name)
@@ -357,6 +357,7 @@ def handle_context_batch(
     """
     Handle merging of different data sources for each context type
     """
+    config = Config()
     sheet_names = []
     for file in [microarray_file, trnaseq_file, mrnaseq_file, scrnaseq_file, proteomics_file]:
         if file is not None:
@@ -474,6 +475,7 @@ def merge_xomics(
     merge_distro: bool = False,
     keep_gene_score: bool = True
 ):
+    config = Config()
     # read custom expression requirment file if used
     if custom_file is not None:
         custom_filepath = os.path.join(config.data_dir, custom_file)
@@ -711,6 +713,7 @@ def main(argv):
     mweight = args.mweight
     sweight = args.sweight
     pweight = args.pweight
+    config = Config()
     
     # read custom expression requirment file if used
     if custom_file != "SKIP":
