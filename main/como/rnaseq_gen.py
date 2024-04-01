@@ -11,14 +11,14 @@ from typing import Optional
 import pandas as pd
 
 from como import rpy2_api
-from como.project import Configs
+from como.project import Config
 from rpy2.robjects import pandas2ri
 
 # enable r to py conversion
 pandas2ri.activate()
 
-configs = Configs()
-r_file_path = Path(configs.root_dir, "como", "rscripts", "rnaseq.R")
+config = Config()
+r_file_path = Path(__file__).parent /  "rscripts" / "rnaseq.R"
 
 
 def load_rnaseq_tests(filename, context_name, lib_type):
@@ -28,8 +28,7 @@ def load_rnaseq_tests(filename, context_name, lib_type):
     
     def load_dummy_dict():
         savepath = os.path.join(
-            configs.root_dir,
-            "data",
+            config.data_dir,
             "data_matrices",
             "placeholder",
             "placeholder_empty_data.csv",
@@ -43,7 +42,7 @@ def load_rnaseq_tests(filename, context_name, lib_type):
         return load_dummy_dict()
     
     inquiry_full_path = os.path.join(
-        configs.root_dir, "data", "config_sheets", filename
+        config.data_dir, "config_sheets", filename
     )
     if not os.path.isfile(
         inquiry_full_path
@@ -64,7 +63,7 @@ def load_rnaseq_tests(filename, context_name, lib_type):
         sys.exit()
     
     fullsavepath = os.path.join(
-        configs.root_dir, "data", "results", context_name, lib_type, filename
+        config.result_dir, context_name, lib_type, filename
     )
     
     if os.path.isfile(fullsavepath):
@@ -98,7 +97,7 @@ def handle_context_batch(
     """
     
     rnaseq_config_filepath = os.path.join(
-        configs.root_dir, "data", "config_sheets", config_filename
+        config.data_dir, "config_sheets", config_filename
     )
     xl = pd.ExcelFile(rnaseq_config_filepath)
     sheet_names = xl.sheet_names
@@ -109,12 +108,12 @@ def handle_context_batch(
         print(f"\nStarting '{context_name}'")
         rnaseq_output_file = f"rnaseq_{prep}_{context_name}.csv"
         rnaseq_output_filepath = os.path.join(
-            configs.data_dir, "results", context_name, prep, rnaseq_output_file
+            config.result_dir, context_name, prep, rnaseq_output_file
         )
         
         rnaseq_input_file = f"gene_counts_matrix_{prep}_{context_name}.csv"
         rnaseq_input_filepath = os.path.join(
-            configs.data_dir, "data_matrices", context_name, rnaseq_input_file
+            config.data_dir, "data_matrices", context_name, rnaseq_input_file
         )
         
         if not os.path.exists(rnaseq_input_filepath):
@@ -123,7 +122,7 @@ def handle_context_batch(
             )
             continue
         
-        gene_info_filepath = os.path.join(configs.data_dir, "gene_info.csv")
+        gene_info_filepath = os.path.join(config.data_dir, "gene_info.csv")
         os.makedirs(os.path.dirname(rnaseq_output_filepath), exist_ok=True)
         
         print(f"Gene info:\t\t{gene_info_filepath}")
