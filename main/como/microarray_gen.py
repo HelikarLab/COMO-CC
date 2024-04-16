@@ -8,12 +8,10 @@ import sys
 from como import GSEpipelineFast
 import numpy as np
 import pandas as pd
-from como.project import Configs
+from como.project import Config
 from sqlalchemy import Column, Float, Integer, String, create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import load_only, sessionmaker
-
-configs = Configs()
 
 # create declarative_base instance
 Base = declarative_base()
@@ -131,6 +129,7 @@ def updateMicroarrayDB(gseXXX):
 
 # function to complete the inquery of a sheet
 def queryTest(df, expression_proportion, top_proportion):
+    config = Config()
     sr = df["GSE ID"]
     gse_ids = sr[sr.str.match("GSE")].unique()
     sr = df["Samples"].dropna()
@@ -142,7 +141,7 @@ def queryTest(df, expression_proportion, top_proportion):
     # fetch data of each gse if it is not in the database, update database
     for gse_id in gse_ids:
         querytable = df[df["GSE ID"] == gse_id]
-        gseXXX = GSEpipelineFast.GSEproject(gse_id, querytable, configs.root_dir)
+        gseXXX = GSEpipelineFast.GSEproject(gse_id, querytable, config.data_dir.parent)
         if lookupMicroarrayDB(gseXXX):
             print("{} already in database, skip over.".format(gseXXX.gsename))
             continue
@@ -304,10 +303,10 @@ def mergeLogicalTable(df_results):
 
 
 def load_microarray_tests(filename, context_name):
+    config = Config()
     def load_empty_dict():
         savepath = os.path.join(
-            configs.root_dir,
-            "data",
+            config.data_dir,
             "data_matrices",
             "placeholder",
             "placeholder_empty_data.csv",
@@ -322,7 +321,7 @@ def load_microarray_tests(filename, context_name):
         return load_empty_dict()
     
     inquiry_full_path = os.path.join(
-        configs.root_dir, "data", "config_sheets", filename
+        config.config_dir, filename
     )
     if not os.path.isfile(inquiry_full_path):
         print("Error: file not found {}".format(inquiry_full_path))
@@ -330,7 +329,7 @@ def load_microarray_tests(filename, context_name):
     
     filename = "Microarray_{}.csv".format(context_name)
     fullsavepath = os.path.join(
-        configs.root_dir, "data", "results", context_name, "microarray", filename
+        config.result_dir, context_name, "microarray", filename
     )
     if os.path.isfile(fullsavepath):
         data = pd.read_csv(fullsavepath, index_col="ENTREZ_GENE_ID")
@@ -350,6 +349,7 @@ def load_microarray_tests(filename, context_name):
 
 def main(argv):
     inputfile = "microarray_data_inputs.xlsx"
+    config = Config()
     
     parser = argparse.ArgumentParser(
         prog="microarray_gen.py",
@@ -391,7 +391,7 @@ def main(argv):
     print("Expression Proportion for Gene Expression is ", expression_proportion)
     print("Top proportion for high-confidence genes is ", top_proportion)
     
-    inqueryFullPath = os.path.join(configs.root_dir, "data", "config_sheets", inputfile)
+    inqueryFullPath = os.path.join(config.config_dir, inputfile)
     xl = pd.ExcelFile(inqueryFullPath)
     sheet_names = xl.sheet_names
     inqueries = pd.read_excel(inqueryFullPath, sheet_name=sheet_names, header=0)
@@ -404,7 +404,7 @@ def main(argv):
         df_output = queryTest(df, expression_proportion, top_proportion)
         filename = "Microarray_{}.csv".format(context_name)
         fullsavepath = os.path.join(
-            configs.root_dir, "data", "results", context_name, filename
+            config.result_dir, context_name, filename
         )
         os.makedirs(os.path.dirname(fullsavepath), exist_ok=True)
         df_output.to_csv(fullsavepath)
