@@ -361,7 +361,7 @@ def handle_context_batch(
     sheet_names = []
     for file in [microarray_file, trnaseq_file, mrnaseq_file, scrnaseq_file, proteomics_file]:
         if file is not None:
-            config_filepath = os.path.join(config.data_dir, "config_sheets", file)
+            config_filepath = os.path.join(config.config_dir, file)
             xl = pd.ExcelFile(config_filepath, engine="openpyxl")
             sheet_names += xl.sheet_names
     
