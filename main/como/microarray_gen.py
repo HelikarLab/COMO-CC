@@ -16,10 +16,10 @@ from sqlalchemy.orm import load_only, sessionmaker
 # create declarative_base instance
 Base = declarative_base()
 
-config = Config()
-db_path = config.data_dir / "microarray.db"
+# config = Config()
+# db_path = config.data_dir / "microarray.db"
 # creates a create_engine instance at the bottom of the file
-engine = create_engine(f"sqlite:///{db_path}")
+engine = create_engine(f"sqlite:///microarray.db")
 
 
 # Add SQL table information
