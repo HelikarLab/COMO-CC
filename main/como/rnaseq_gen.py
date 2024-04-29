@@ -1,32 +1,34 @@
 #!/usr/bin/python3
 
 import argparse
+from enum import Enum
 import os
 import re
 import sys
 from pathlib import Path
+from typing import Optional
 
 import pandas as pd
-import rpy2_api
-from project import Configs
+
+from como import rpy2_api
+from como.project import Config
 from rpy2.robjects import pandas2ri
 
 # enable r to py conversion
 pandas2ri.activate()
 
-configs = Configs()
-r_file_path = Path(configs.root_dir, "src", "rscripts", "rnaseq.R")
+r_file_path = Path(__file__).parent /  "rscripts" / "rnaseq.R"
 
 
 def load_rnaseq_tests(filename, context_name, lib_type):
     """
     Load rnaseq results returning a dictionary of test (context, context, cell, etc ) names and rnaseq expression data
     """
+    config = Config()
     
     def load_dummy_dict():
         savepath = os.path.join(
-            configs.root_dir,
-            "data",
+            config.data_dir,
             "data_matrices",
             "placeholder",
             "placeholder_empty_data.csv",
@@ -40,7 +42,7 @@ def load_rnaseq_tests(filename, context_name, lib_type):
         return load_dummy_dict()
     
     inquiry_full_path = os.path.join(
-        configs.root_dir, "data", "config_sheets", filename
+        config.data_dir, "config_sheets", filename
     )
     if not os.path.isfile(
         inquiry_full_path
@@ -61,7 +63,7 @@ def load_rnaseq_tests(filename, context_name, lib_type):
         sys.exit()
     
     fullsavepath = os.path.join(
-        configs.root_dir, "data", "results", context_name, lib_type, filename
+        config.result_dir, context_name, lib_type, filename
     )
     
     if os.path.isfile(fullsavepath):
@@ -94,9 +96,8 @@ def handle_context_batch(
     Handle iteration through each context type and create rnaseq expression file by calling rnaseq.R
     """
     
-    rnaseq_config_filepath = os.path.join(
-        configs.root_dir, "data", "config_sheets", config_filename
-    )
+    config = Config()
+    rnaseq_config_filepath = config_filename 
     xl = pd.ExcelFile(rnaseq_config_filepath)
     sheet_names = xl.sheet_names
     
@@ -106,12 +107,12 @@ def handle_context_batch(
         print(f"\nStarting '{context_name}'")
         rnaseq_output_file = f"rnaseq_{prep}_{context_name}.csv"
         rnaseq_output_filepath = os.path.join(
-            configs.data_dir, "results", context_name, prep, rnaseq_output_file
+            config.result_dir, context_name, prep, rnaseq_output_file
         )
         
         rnaseq_input_file = f"gene_counts_matrix_{prep}_{context_name}.csv"
         rnaseq_input_filepath = os.path.join(
-            configs.data_dir, "data_matrices", context_name, rnaseq_input_file
+            config.data_dir, "data_matrices", context_name, rnaseq_input_file
         )
         
         if not os.path.exists(rnaseq_input_filepath):
@@ -120,7 +121,7 @@ def handle_context_batch(
             )
             continue
         
-        gene_info_filepath = os.path.join(configs.data_dir, "gene_info.csv")
+        gene_info_filepath = os.path.join(config.data_dir, "gene_info.csv")
         os.makedirs(os.path.dirname(rnaseq_output_filepath), exist_ok=True)
         
         print(f"Gene info:\t\t{gene_info_filepath}")
@@ -146,6 +147,59 @@ def handle_context_batch(
         
         print(f"Results saved at:\t{rnaseq_output_filepath}")
 
+
+class Technique(Enum):
+    ZFPKM = "zfpkm"
+    TPM = "quantile"
+    CPM = "cpm"
+
+def rnaseq_gen(
+    config_filename: str,
+    replicate_ratio: float = 0.5,
+    batch_ratio: float = 0.5,
+    replicate_ratio_high: float = 1.0,
+    batch_ratio_high: float = 1.0,
+    technique: Technique = Technique.TPM,
+    cut_off: Optional[int] = None,
+    prep: Optional[str] = "",
+) -> None:
+    if not technique in Technique:
+        raise ValueError(f"Technique must be one of {Technique}") 
+    
+    if technique == Technique.TPM:
+        if cut_off is None:
+            cut_off = 25
+        
+        if cut_off < 1 or cut_off > 100:
+            raise ValueError("Quantile must be between 1 - 100")
+
+    elif technique == Technique.CPM:
+        if cut_off is not None and cut_off < 0:
+            raise ValueError("Cutoff must be greater than 0")
+
+        if cut_off is None:
+            cut_off = "default"
+    elif technique == Technique.ZFPKM:
+        # if cut_off is not None and (cut_off < -3 or cut_off > -2):
+        #     raise ValueError("Cutoff must be between -3 and -2")
+
+        if cut_off is None:
+            cut_off = "default"
+
+    prep = prep.replace(" ", "")
+
+    handle_context_batch(
+        config_filename,
+        replicate_ratio,
+        batch_ratio,
+        replicate_ratio_high,
+        batch_ratio_high,
+        technique.value,
+        cut_off,
+        cut_off,
+        cut_off,
+        prep,
+    )
 
 def main(argv):
     """

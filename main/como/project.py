@@ -1,6 +1,37 @@
 import os
 from pathlib import Path
 
+class SingletonMeta(type):
+    _instances = {}
+
+    def __call__(cls, *args, **kwargs):
+        """
+        Possible changes to the value of the `__init__` argument do not affect
+        the returned instance.
+        """
+        if cls not in cls._instances:
+            instance = super().__call__(*args, **kwargs)
+            cls._instances[cls] = instance
+        return cls._instances[cls]
+
+
+class Config(metaclass=SingletonMeta):
+    def __init__(self, data_dir: Path = None, config_dir: Path = None, result_dir: Path = None) -> None:
+        self.data_dir = data_dir
+        if self.data_dir is None:
+            self.data_dir = Path.cwd() / "data"
+            self.data_dir.mkdir(exist_ok=True)
+
+        self.config_dir = config_dir
+        if self.config_dir is None:
+            self.config_dir = Path.cwd() / "data" / "config_sheets"
+            self.config_dir.mkdir(exist_ok=True)
+
+        self.result_dir = result_dir
+        if self.result_dir is None:
+            self.result_dir = Path.cwd() / "data" / "results"
+            self.result_dir.mkdir(exist_ok=True)
+
 
 class Configs:
     project_dir: str = None
@@ -16,7 +47,7 @@ class Configs:
         self.data_dir: str = os.path.join(self.root_dir, "data")
         self.config_dir: str = os.path.join(self.data_dir, "config_sheets")
         self.results_dir: str = os.path.join(self.data_dir, "results")
-        self.src_dir: str = os.path.join(self.root_dir, "src")
+        self.src_dir: str = os.path.join(self.root_dir, "como")
     
     def _find_project_dir(self) -> Path:
         # Determine if "main" is in the current directory (i.e., `ls .`)

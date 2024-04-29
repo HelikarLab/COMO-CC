@@ -1,19 +1,20 @@
-import re
-import os
-import sys
-import glob
 import argparse
+import glob
+import os
+import re
+import sys
+from pathlib import Path
+from typing import Optional, Union
+
 import numpy as np
 import pandas as pd
-from pathlib import Path
+from fast_bioservices import BioDBNet, Input, Output, Taxon
 
-import rpy2_api
-import como_utilities
-from project import Configs
-from multi_bioservices import db2db, InputDatabase, OutputDatabase, TaxonID
+from como import como_utilities
+from como import rpy2_api
+from como.project import Config 
 
-configs = Configs()
-r_file_path: Path = Path(configs.root_dir, "src", "rscripts", "generate_counts_matrix.R")
+r_file_path: Path = Path(__file__).parent / "rscripts" / "generate_counts_matrix.R"
 
 
 def create_counts_matrix(context_name):
@@ -21,9 +22,10 @@ def create_counts_matrix(context_name):
     Create a counts matrix by reading gene counts tables in COMO_input/<context name>/<study number>/geneCounts/
     Uses R in backend (generate_counts_matrix.R)
     """
-    input_dir = os.path.join(configs.root_dir, 'data', 'COMO_input', context_name)
+    config = Config()
+    input_dir = os.path.join(config.data_dir, 'COMO_input', context_name)
     print(f"Looking for STAR gene count tables in '{input_dir}'")
-    matrix_output_dir = os.path.join(configs.root_dir, 'data', 'data_matrices', context_name)
+    matrix_output_dir = os.path.join(config.data_dir, 'data_matrices', context_name)
     print(f"Creating Counts Matrix for '{context_name}'")
     
     # call generate_counts_matrix.R to create count matrix from COMO_input folder
@@ -33,11 +35,12 @@ def create_counts_matrix(context_name):
 
 def create_config_df(context_name):
     """
-    Create configuration sheet at /work/data/config_sheets/rnaseq_data_inputs_auto.xlsx
+    Create configuration sheet at /main/data/config_sheets/rnaseq_data_inputs_auto.xlsx
     based on the gene counts matrix. If using zFPKM normalization technique, fetch mean fragment lengths from
     /work/data/COMO_input/<context name>/<study number>/fragmentSizes/
     """
-    gene_counts_glob = os.path.join(configs.root_dir, "data", "COMO_input", context_name, "geneCounts", "*", "*.tab")
+    config = Config()
+    gene_counts_glob = os.path.join(config.data_dir, "COMO_input", context_name, "geneCounts", "*", "*.tab")
     gene_counts_files = glob.glob(gene_counts_glob, recursive=True)
     
     out_df = pd.DataFrame(columns=['SampleName', 'FragmentLength', 'Layout', 'Strand', 'Group'])
@@ -50,10 +53,11 @@ def create_config_df(context_name):
             label = re.findall(r"S\d{1,3}R\d{1,3}(?:r\d{1,3})?", gcfilename)[0]
         
         except IndexError:
-            print(f"\nfilename of {gcfilename} is not valid. Should be 'contextName_SXRYrZ.tab', where X is the "
-                  "study/batch number, Y is the replicate number, and Z is the run number. If not a multi-run sample, "
-                  "exclude 'rZ' from the filename.")
-            sys.exit()
+            raise IndexError(
+                f"\n\nFilename of '{gcfilename}' is not valid. Should be 'contextName_SXRYrZ.tab', where X is the "
+                "study/batch number, Y is the replicate number, and Z is the run number."
+                "\n\nIf not a multi-run sample, exclude 'rZ' from the filename."
+            )
         
         study_number = re.findall(r"S\d{1,3}", label)[0]
         rep_number = re.findall(r"R\d{1,3}", label)[0]
@@ -73,7 +77,7 @@ def create_config_df(context_name):
                     r_label = re.findall(r"r\d{1,3}", r)[0]
                     R_label = re.findall(r"R\d{1,3}", r)[0]
                     frag_filename = "".join([context_name, "_", study_number, R_label, r_label, "_fragment_size.txt"])
-                    frag_files.append(os.path.join(configs.root_dir, "data", "COMO_input", context_name,
+                    frag_files.append(os.path.join(config.data_dir, "COMO_input", context_name,
                                                    "fragmentSizes", study_number, frag_filename))
         
         layout_file = context_name + "_" + label + "_layout.txt"
@@ -81,7 +85,7 @@ def create_config_df(context_name):
         frag_file = context_name + "_" + label + "_fragment_size.txt"
         prep_file = context_name + "_" + label + "_prep_method.txt"
         
-        context_path = os.path.join(configs.root_dir, "data", "COMO_input", context_name)
+        context_path = os.path.join(config.data_dir, "COMO_input", context_name)
         layout_path = os.path.join(context_path, "layouts", "*", layout_file)
         strand_path = os.path.join(context_path, "strandedness", "*", strand_file)
         frag_path = os.path.join(context_path, "fragmentSizes", "*", frag_file)
@@ -203,47 +207,42 @@ def split_counts_matrices(count_matrix_all, df_total, df_mrna):
     return matrix_total, matrix_mrna
 
 
-def create_gene_info_file(matrix_file_list: list[str], form: InputDatabase, taxon_id):
+def create_gene_info_file(matrix_file_list: list[str], input_format: Input, taxon_id):
     """
     Create gene info file for specified context by reading first column in its count matrix file at
      results/<context name>/gene_info_<context name>.csv
     """
+    config = Config()
     
-    print(f"Fetching gene info")
-    gene_info_file = os.path.join(configs.data_dir, "gene_info.csv")
-    genes: list[str]
-    if os.path.exists(gene_info_file):
-        current_df = pd.read_csv(gene_info_file)
-        genes = current_df["ensembl_gene_id"].tolist()
-    else:
-        genes = []
-    
+    print("Fetching gene info")
+    gene_info_file = os.path.join(config.data_dir, "gene_info.csv")
+    genes: list[str] = []
     for file in matrix_file_list:
-        add_genes = pd.read_csv(file)["genes"].tolist()
-        genes += add_genes
+        genes += pd.read_csv(file)["genes"].tolist()
     genes = list(set(genes))
     
     # Create our output database format
     # Do not include values equal to "form"
     # Remove items not equal to `form` because the input database cannot exist as an output database
-    output_db: list[OutputDatabase] = [
+    output_db: list[Output] = [
         i for i in [
-            OutputDatabase.ENSEMBL_GENE_ID,
-            OutputDatabase.GENE_SYMBOL,
-            OutputDatabase.GENE_ID,
-            OutputDatabase.CHROMOSOMAL_LOCATION
+            Output.ENSEMBL_GENE_ID,
+            Output.GENE_SYMBOL,
+            Output.GENE_ID,
+            Output.CHROMOSOMAL_LOCATION
         ]
-        if i.value != form.value
+        if i.value != input_format.value
     ]
     
-    gene_info = db2db(
+    biodbnet = BioDBNet()
+    gene_info = biodbnet.db2db(
         input_values=genes,
-        input_db=form,
+        input_db=input_format,
         output_db=output_db,
-        taxon_id=taxon_id,
+        taxon=taxon_id,
     )
     
-    gene_info.rename(columns={OutputDatabase.ENSEMBL_GENE_ID.value: "ensembl_gene_id"}, inplace=True)
+    gene_info.rename(columns={Output.ENSEMBL_GENE_ID.value: "ensembl_gene_id"}, inplace=True)
     gene_info['start_position'] = gene_info['Chromosomal Location'].str.extract(r"chr_start: (\d+)")
     gene_info['end_position'] = gene_info['Chromosomal Location'].str.extract(r"chr_end: (\d+)")
     gene_info.rename(columns={"Gene Symbol": "hgnc_symbol", "Gene ID": "entrezgene_id"}, inplace=True)
@@ -252,12 +251,13 @@ def create_gene_info_file(matrix_file_list: list[str], form: InputDatabase, taxo
     print(f"Gene Info file written at '{gene_info_file}'")
 
 
-def handle_context_batch(context_names, mode, form: InputDatabase, taxon_id, provided_matrix_file):
+def handle_context_batch(context_names, mode, input_format: Input, taxon_id, provided_matrix_file):
     """
     Handle iteration through each context type and create files according to flag used (config, matrix, info)
     """
-    trnaseq_config_filename = os.path.join(configs.root_dir, "data", "config_sheets", "trnaseq_data_inputs_auto.xlsx")
-    mrnaseq_config_filename = os.path.join(configs.root_dir, "data", "config_sheets", "mrnaseq_data_inputs_auto.xlsx")
+    config = Config()
+    trnaseq_config_filename = os.path.join(config.config_dir, "trnaseq_data_inputs_auto.xlsx")
+    mrnaseq_config_filename = os.path.join(config.config_dir, "mrnaseq_data_inputs_auto.xlsx")
     
     tflag = False  # turn on when any total set is found to prevent writer from being init multiple times or empty
     mflag = False  # turn on when any mrna set is found to prevent writer from being init multiple times or empty
@@ -269,8 +269,8 @@ def handle_context_batch(context_names, mode, form: InputDatabase, taxon_id, pro
     for context_name in context_names:
         context_name = context_name.strip(" ")
         print(f"Preprocessing {context_name}")
-        gene_output_dir = os.path.join(configs.root_dir, "data", "results", context_name)
-        matrix_output_dir = os.path.join(configs.root_dir, "data", "data_matrices", context_name)
+        gene_output_dir = os.path.join(config.result_dir, context_name)
+        matrix_output_dir = os.path.join(config.data_dir, "data_matrices", context_name)
         os.makedirs(gene_output_dir, exist_ok=True)
         os.makedirs(matrix_output_dir, exist_ok=True)
         print('Gene info output directory is "{}"'.format(gene_output_dir))
@@ -278,7 +278,6 @@ def handle_context_batch(context_names, mode, form: InputDatabase, taxon_id, pro
         matrix_path_all = os.path.join(matrix_output_dir, ("gene_counts_matrix_full_" + context_name + ".csv"))
         matrix_path_total = os.path.join(matrix_output_dir, ("gene_counts_matrix_total_" + context_name + ".csv"))
         matrix_path_mrna = os.path.join(matrix_output_dir, ("gene_counts_matrix_mrna_" + context_name + ".csv"))
-        matrix_path_prov = os.path.join(matrix_output_dir, provided_matrix_file)
         
         if mode == "make":
             create_counts_matrix(context_name)
@@ -314,11 +313,31 @@ def handle_context_batch(context_names, mode, form: InputDatabase, taxon_id, pro
         if mflag:
             mwriter.close()
         
-        create_gene_info_file(tmatrix_files + mmatrix_files, form, taxon_id)
+        create_gene_info_file(tmatrix_files + mmatrix_files, input_format, taxon_id)
     
     else:
-        matrix_files: list[str] = como_utilities.stringlist_to_list(matrix_path_prov)
-        create_gene_info_file(matrix_files, form, taxon_id)
+        matrix_files: list[str] = como_utilities.stringlist_to_list(provided_matrix_file)
+        create_gene_info_file(matrix_files, input_format, taxon_id)
+
+
+def rnaseq_preprocess(context_names: str, mode: str, input_format: Input, taxon_id: Union[int, str], matrix_file: Optional[str] = None) -> None:
+    if not mode == "make" and not mode == "provide":
+        raise ValueError("mode must be either 'make' or 'provide'")
+    
+    if not input_format in [Input.ENSEMBL_GENE_ID, Input.GENE_SYMBOL, Input.GENE_ID]:
+        raise ValueError("input_format must be either 'ENSEMBL_GENE_ID', 'GENE_SYMBOL', or 'GENE_ID'")
+    
+    if not isinstance(taxon_id, int) and not taxon_id in ["human", "mouse"]:
+        raise ValueError("taxon_id must be either an integer, or accepted string ('mouse', 'human')")
+    
+
+    handle_context_batch(
+        context_names=context_names,
+        mode=mode,
+        input_format=input_format,
+        taxon_id=taxon_id,
+        provided_matrix_file=matrix_file
+    )
 
 
 def parse_args(argv):
@@ -413,13 +432,13 @@ def main(argv):
     args = parse_args(argv)
     
     if args.gene_format.upper() in ["ENSEMBL", "ENSEMBLE", "ENSG", "ENSMUSG", "ENSEMBL ID", "ENSEMBL GENE ID"]:
-        gene_format_database: InputDatabase = InputDatabase.ENSEMBL_GENE_ID
+        gene_format_database: Input = Input.ENSEMBL_GENE_ID
     
     elif args.gene_format.upper() in ["HGNC SYMBOL", "HUGO", "HUGO SYMBOL", "SYMBOL", "HGNC", "GENE SYMBOL"]:
-        gene_format_database: InputDatabase = InputDatabase.GENE_SYMBOL
+        gene_format_database: Input = Input.GENE_SYMBOL
     
     elif args.gene_format.upper() in ["ENTREZ", "ENTRES", "ENTREZ ID", "ENTREZ NUMBER" "GENE ID"]:
-        gene_format_database: InputDatabase = InputDatabase.GENE_ID
+        gene_format_database: Input = Input.GENE_ID
     
     else:  # provided invalid gene format
         print("Gene format (--gene_format) is invalid")
@@ -430,9 +449,9 @@ def main(argv):
     # handle species alternative ids
     if isinstance(args.taxon_id, str):
         if args.taxon_id.upper() == "HUMAN" or args.taxon_id.upper() == "HOMO SAPIENS":
-            taxon_id = TaxonID.HOMO_SAPIENS
+            taxon_id = Taxon.HOMO_SAPIENS
         elif args.taxon_id.upper() == "MOUSE" or args.taxon_id.upper() == "MUS MUSCULUS":
-            taxon_id = TaxonID.MUS_MUSCULUS
+            taxon_id = Taxon.MUS_MUSCULUS
         else:
             print("--taxon-id must be either an integer, or accepted string ('mouse', 'human')")
             sys.exit(1)
@@ -452,7 +471,13 @@ def main(argv):
         print("--provide-matrix or --create-matrix must be set")
         sys.exit(1)
     
-    handle_context_batch(args.context_names, mode, gene_format_database, taxon_id, args.provided_matrix_fname)
+    handle_context_batch(
+        context_names=args.context_names,
+        mode=mode,
+        input_format=gene_format_database,
+        taxon_id=taxon_id,
+        provided_matrix_file=args.provided_matrix_fname
+    )
 
 
 if __name__ == "__main__":
