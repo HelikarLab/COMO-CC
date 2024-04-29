@@ -97,9 +97,7 @@ def handle_context_batch(
     """
     
     config = Config()
-    rnaseq_config_filepath = os.path.join(
-        config.data_dir, "config_sheets", config_filename
-    )
+    rnaseq_config_filepath = config_filename 
     xl = pd.ExcelFile(rnaseq_config_filepath)
     sheet_names = xl.sheet_names
     
