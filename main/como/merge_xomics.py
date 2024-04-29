@@ -108,7 +108,7 @@ def get_transcriptmoic_details(merged_df: pd.DataFrame) -> pd.DataFrame:
     else:
         transcriptomic_df: pd.DataFrame = merged_df.copy()
     
-    biodbnet = BioDBNet(max_workers=1)
+    biodbnet = BioDBNet()
     gene_details: pd.DataFrame = biodbnet.db2db(
         input_values=transcriptomic_df.index.astype(str).values.tolist(),
         input_db=Input.GENE_ID,

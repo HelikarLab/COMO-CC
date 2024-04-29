@@ -234,7 +234,7 @@ def create_gene_info_file(matrix_file_list: list[str], input_format: Input, taxo
         if i.value != input_format.value
     ]
     
-    biodbnet = BioDBNet(max_workers=1)
+    biodbnet = BioDBNet()
     gene_info = biodbnet.db2db(
         input_values=genes,
         input_db=input_format,
