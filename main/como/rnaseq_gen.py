@@ -182,8 +182,8 @@ def rnaseq_gen(
         if cut_off is None:
             cut_off = "default"
     elif technique == Technique.ZFPKM:
-        if cut_off is not None and (cut_off < -3 or cut_off > -2):
-            raise ValueError("Cutoff must be between -3 and -2")
+        # if cut_off is not None and (cut_off < -3 or cut_off > -2):
+        #     raise ValueError("Cutoff must be between -3 and -2")
 
         if cut_off is None:
             cut_off = "default"
