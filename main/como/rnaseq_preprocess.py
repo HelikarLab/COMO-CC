@@ -316,8 +316,7 @@ def handle_context_batch(context_names, mode, input_format: Input, taxon_id, pro
         create_gene_info_file(tmatrix_files + mmatrix_files, input_format, taxon_id)
     
     else:
-        matrix_path_prov = os.path.join(matrix_output_dir, provided_matrix_file)
-        matrix_files: list[str] = como_utilities.stringlist_to_list(matrix_path_prov)
+        matrix_files: list[str] = como_utilities.stringlist_to_list(provided_matrix_file)
         create_gene_info_file(matrix_files, input_format, taxon_id)
 
 
