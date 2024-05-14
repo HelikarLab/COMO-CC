@@ -116,10 +116,8 @@ def knock_out_simulation(
                     boolval = "False"
                 else:
                     # boolval = "{}".format(model.genes.get_by_id(gene_id)._functional)
-                    boolval = "{}".format(model.genes.get_by_id(gene_id).functional)
-                gene_reaction_rule = gene_reaction_rule.replace(
-                    "{}".format(gene_id), boolval, 1
-                )
+                    boolval = "{}".format(model.genes.get_by_id(gene_id).functional)  # type: ignore
+                gene_reaction_rule = gene_reaction_rule.replace("{}".format(gene_id), boolval, 1)
             if not eval(gene_reaction_rule) or test_all:
                 genes_with_metabolic_effects.append(id_)
                 break
@@ -136,7 +134,7 @@ def knock_out_simulation(
     
     # Require at least one core
     num_cores: int = max(1, mp.cpu_count() - 2)
-    pool: mp.Pool = mp.Pool(num_cores, initializer=initialize_pool, initargs=(synchronizer,))
+    pool = mp.Pool(num_cores, initializer=initialize_pool, initargs=(synchronizer,))
     
     spacer: int = len(str(len(genes_with_metabolic_effects)))
     flux_solution: pd.DataFrame = pd.DataFrame()
@@ -200,9 +198,7 @@ def create_gene_pairs(
     DAG_dis_genes = pd.DataFrame()  # data analysis genes
     DAG_dis_genes["Gene ID"] = disease_genes.iloc[:, 0].astype(str)
     # DAG_dis_genes
-    DAG_dis_met_genes = set(DAG_dis_genes["Gene ID"].tolist()).intersection(
-        gene_ind2genes
-    )
+    DAG_dis_met_genes = set(DAG_dis_genes["Gene ID"].tolist()).intersection(gene_ind2genes)
     # DAG_dis_met_genes
     
     DAG_dis_met_rxn_ind = []
@@ -233,10 +229,7 @@ def create_gene_pairs(
         rxn_fluxDiffs = dag_rxn_flux_diffs[id_].copy()
         rxn_fluxValue = dag_rxn_flux_value[id_].copy()
         pegene["Gene"] = id_
-        pegene = pegene.loc[
-            (~pegene["rxn_fluxRatio"].isna())
-            & (abs(rxn_fluxDiffs) + abs(rxn_fluxValue) > 1e-8)
-            ]
+        pegene = pegene.loc[(~pegene["rxn_fluxRatio"].isna()) & (abs(rxn_fluxDiffs) + abs(rxn_fluxValue) > 1e-8)]
         # pegene.dropna(axis=0,subset=['rxn_fluxRatio'],inplace=True)
         pegene.index.name = "reaction"
         pegene.reset_index(drop=False, inplace=True)
@@ -272,9 +265,7 @@ def score_gene_pairs_diff(gene_pairs, file_full_path):
     for p_gene in p_model_genes:
         data_p = gene_pairs.loc[gene_pairs["Gene"] == p_gene].copy()
         total_aff = data_p["Gene IDs"].unique().size
-        n_aff_down = (
-            data_p.loc[data_p["rxn_fluxRatio"] < -1e-8, "Gene IDs"].unique().size
-        )
+        n_aff_down = data_p.loc[data_p["rxn_fluxRatio"] < -1e-8, "Gene IDs"].unique().size
         n_aff_up = data_p.loc[data_p["rxn_fluxRatio"] > 1e-8, "Gene IDs"].unique().size
         d_s = (n_aff_down - n_aff_up) / total_aff
         d_score.at[p_gene, "score"] = d_s
@@ -307,16 +298,20 @@ def repurposing_hub_preproc(drug_file):
             continue
         for target in row["target"].split("|"):
             drug_db_new = pd.concat(
-                [drug_db_new,
-                 pd.DataFrame([
+                [
+                    drug_db_new,
+                    pd.DataFrame(
+                        [
                      {
                          "Name": row["pert_iname"],
                          "MOA": row["moa"],
                          "Target": target.strip(),
-                         "Phase": row["clinical_phase"]
-                     }])
+                                "Phase": row["clinical_phase"],
+                            }
+                        ]
+                    ),
                  ],
-                ignore_index=True
+                ignore_index=True,
             )
     drug_db_new.reset_index(inplace=True)
     
@@ -355,9 +350,7 @@ def drug_repurposing(drug_db, d_score):
         d_score_new = pd.concat([d_score_new, drugs], ignore_index=True)
     
     d_score_new.drop_duplicates(inplace=True)
-    d_score_trim = d_score_new[
-        d_score_new["MOA"].str.lower().str.contains("inhibitor") == True
-        ]
+    d_score_trim = d_score_new[d_score_new["MOA"].str.lower().str.contains("inhibitor") == True]
     
     return d_score_trim
 
@@ -375,7 +368,7 @@ def main(argv):
         type=str,
         required=True,
         dest="model",
-        help="The context-specific model file, (must be .mat, .xml, or .json"
+        help="The context-specific model file, (must be .mat, .xml, or .json",
     )
     parser.add_argument(
         "-c",
@@ -383,7 +376,7 @@ def main(argv):
         type=str,
         required=True,
         dest="context",
-        help="Name of context, tissue, cell-type, etc"
+        help="Name of context, tissue, cell-type, etc",
     )
     parser.add_argument(
         "-d",
@@ -391,7 +384,7 @@ def main(argv):
         type=str,
         required=True,
         dest="disease",
-        help="Name of disease"
+        help="Name of disease",
     )
     parser.add_argument(
         "-up",
@@ -399,7 +392,7 @@ def main(argv):
         type=str,
         required=True,
         dest="disease_up",
-        help="The name of the disease up-regulated file"
+        help="The name of the disease up-regulated file",
     )
     parser.add_argument(
         "-dn",
@@ -407,7 +400,7 @@ def main(argv):
         type=str,
         required=True,
         dest="disease_down",
-        help="The name of the disease down-regulated file"
+        help="The name of the disease down-regulated file",
     )
     parser.add_argument(
         "-r",
@@ -415,7 +408,7 @@ def main(argv):
         type=str,
         required=True,
         dest="raw_drug_file",
-        help="The name of the raw drug file"
+        help="The name of the raw drug file",
     )
     parser.add_argument(
         "-f",
@@ -424,7 +417,7 @@ def main(argv):
         required=False,
         default=None,
         dest="ref_flux_file",
-        help="The name of the reference flux file"
+        help="The name of the reference flux file",
     )
     parser.add_argument(
         "-a",
@@ -433,7 +426,7 @@ def main(argv):
         required=False,
         default=False,
         dest="test_all",
-        help="Test all genes, even ones predicted to have little no effect."
+        help="Test all genes, even ones predicted to have little no effect.",
     )
     parser.add_argument(
         "-p",
@@ -449,7 +442,8 @@ def main(argv):
         "--solver",
         type=str,
         required=False,
-        default="gurobi",
+        default="glpk",
+        choices=["gurobi", "glpk"],
         dest="solver",
         help="The solver to use for FBA. Options are: gurobi or glpk"
     )
@@ -497,7 +491,14 @@ def main(argv):
         drug_db = pd.read_csv(reformatted_drug_file, sep="\t")
     
     # Knock Out Simulation
-    model, gene_ind2genes, has_effects_gene, fluxsolution, flux_solution_ratios, flux_solution_diffs = knock_out_simulation(
+    (
+        model,
+        gene_ind2genes,
+        has_effects_gene,
+        fluxsolution,
+        flux_solution_ratios,
+        flux_solution_diffs,
+    ) = knock_out_simulation(
         model=cobra_model,
         inhibitors_filepath=inhibitors_file,
         drug_db=drug_db,
@@ -541,7 +542,12 @@ def main(argv):
     pertubation_effect_score.reset_index(drop=False, inplace=True)
     
     # last step: output drugs based on d score
-    drug_score = drug_repurposing(drug_db, pertubation_effect_score)
+    drug_score = drug_repurposing(
+        drug_db=drug_db,
+        d_score=pertubation_effect_score,
+        biodbnet=biodbnet,
+        taxon_id=taxon_id,
+    )
     drug_score_file = os.path.join(output_dir, f"{context}_drug_score.csv")
     drug_score.to_csv(drug_score_file, index=False)
     print("Gene D score mapped to repurposing drugs saved to\n{}".format(drug_score_file))
