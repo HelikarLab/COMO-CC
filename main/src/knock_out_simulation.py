@@ -23,6 +23,7 @@ def _perform_knockout(
     model: cobra.Model,
     gene_id: str,
     reference_solution,
+    knockout_method: knockout_method_options,
 ) -> tuple[str, pd.DataFrame]:
     """
     This function will perform a single gene knockout. It will be used in multiprocessing
@@ -31,10 +32,9 @@ def _perform_knockout(
     gene: cobra.Gene = model_copy.genes.get_by_id(gene_id)
     gene.knock_out()
     
+    if knockout_method == "moma":
     optimized_model: pd.DataFrame = cobra.flux_analysis.moma(
-        model_copy,
-        solution=reference_solution,
-        linear=False
+            model_copy, solution=reference_solution, linear=False
     ).to_frame()
     
     count_progress.acquire()
@@ -57,7 +57,8 @@ def knock_out_simulation(
     drug_db: pd.DataFrame,
     reference_flux_filepath: Union[str, Path, None],
     test_all: bool,
-    pars_flag: bool
+    pars_flag: bool,
+    knockout_method: knockout_method_options,
 ):
     reference_solution: cobra.Solution
     if reference_flux_filepath is not None:
@@ -140,6 +141,7 @@ def knock_out_simulation(
     
     print(f"Found {len(genes_with_metabolic_effects)} genes with potentially-significant metabolic impacts\n")
     import time
+
     start = time.time()
     
     output: list[mp.pool.ApplyResult] = []
@@ -153,7 +155,8 @@ def knock_out_simulation(
                     "model": model,
                     "gene_id": id_,
                     "reference_solution": reference_solution,
-                }
+                    "knockout_method": knockout_method,
+                },
             )
         )
     pool.close()
@@ -238,14 +241,20 @@ def create_gene_pairs(
     return gene_pairs
 
 
-def score_gene_pairs(gene_pairs, filename, input_reg):
-    p_model_genes = gene_pairs.Gene.unique()
+def score_gene_pairs(
+    gene_pairs: pd.DataFrame,
+    filename,
+    input_reg,
+    downreg_flux_cutoff: float,
+    upreg_flux_cutoff: float,
+):
+    p_model_genes = gene_pairs["Gene"].unique()
     d_score = pd.DataFrame([], columns=["score"])
     for p_gene in p_model_genes:
         data_p = gene_pairs.loc[gene_pairs["Gene"] == p_gene].copy()
         total_aff = data_p["Gene IDs"].unique().size
-        n_aff_down = data_p.loc[abs(data_p["rxn_fluxRatio"]) < 0.9, "Gene IDs"].unique().size
-        n_aff_up = data_p.loc[abs(data_p["rxn_fluxRatio"]) > 1.1, "Gene IDs"].unique().size
+        n_aff_down = data_p.loc[abs(data_p["rxn_fluxRatio"]) < downreg_flux_cutoff, "Gene IDs"].unique().size
+        n_aff_up = data_p.loc[abs(data_p["rxn_fluxRatio"]) > upreg_flux_cutoff, "Gene IDs"].unique().size
         if input_reg == "up":
             d_s = (n_aff_down - n_aff_up) / total_aff
         else:
@@ -318,6 +327,7 @@ def repurposing_hub_preproc(drug_file, biodbnet: BioDBNet, taxon_id: int):
         input_values=drug_db_new["Target"].tolist(),
         input_db=Input.GENE_SYMBOL,
         output_db=Output.GENE_ID,
+        taxon=taxon_id,
     )
     
     # entrez_ids = fetch_entrez_gene_id(drug_db_new["Target"].tolist(), input_db="Gene Symbol")
@@ -333,6 +343,7 @@ def drug_repurposing(drug_db, d_score, biodbnet: BioDBNet, taxon_id: int):
         input_values=d_score["Gene"].tolist(),
         input_db=Input.GENE_ID,
         output_db=[Output.GENE_SYMBOL],
+        taxon=taxon_id,
     )
     
     d_score.set_index("Gene", inplace=True)
@@ -352,12 +363,25 @@ def drug_repurposing(drug_db, d_score, biodbnet: BioDBNet, taxon_id: int):
     return d_score_trim
 
 
+def knockout_method_type(arg_value):
+    if arg_value not in knockout_method_options:
+        raise ValueError(f"Invalid knockout method: {arg_value}")
+    return arg_value
+
+
 def main(argv):
     parser = argparse.ArgumentParser(
         prog="knock_out_simulation.py",
         description="This script is responsible for mapping drug targets in metabolic models, performing knock out simulations, and comparing simulation results with disease genes. It also identified drug targets and repurposable drugs.",
         epilog="For additional help, please post questions/issues in the MADRID GitHub repo at "
                "https://github.com/HelikarLab/COMO",
+    )
+    parser.add_argument(
+        "--taxon-id",
+        type=int,
+        required=True,
+        dest="taxon_id",
+        help="The taxon ID of the organism, such as 9096",
     )
     parser.add_argument(
         "-m",
@@ -432,7 +456,16 @@ def main(argv):
         required=False,
         default=False,
         dest="pars_flag",
-        help="Use parsimonious FBA for optimal reference solution (only if not providing flux file)"
+        help="Use parsimonious FBA for optimal reference solution (only if not providing flux file)",
+    )
+    parser.add_argument(
+        "--knockout-method",
+        type=knockout_method_type,
+        required=False,
+        choices=["moma"],
+        default="moma",
+        dest="knockout_method",
+        help="The method to use for knockout simulation",
     )
     parser.add_argument(
         "-s",
@@ -534,7 +567,8 @@ def main(argv):
         drug_db=drug_db,
         reference_flux_filepath=ref_flux_file,
         test_all=test_all,
-        pars_flag=pars_flag
+        pars_flag=pars_flag,
+        knockout_method=knockout_method,
     )
     
     flux_solution_diffs.to_csv(os.path.join(output_dir, "flux_diffs_KO.csv"))
@@ -554,19 +588,33 @@ def main(argv):
     gene_pairs_down.to_csv(os.path.join(output_dir, f"{context}_Gene_Pairs_Inhi_Fratio_DOWN.txt"), index=False)
     
     gene_pairs_up = create_gene_pairs(
-        configs.data_dir,
-        model,
-        gene_ind2genes,
-        fluxsolution,
-        flux_solution_ratios,
-        flux_solution_diffs,
-        has_effects_gene,
+        datadir=configs.data_dir,
+        model=model,
+        gene_ind2genes=gene_ind2genes,
+        flux_solution=fluxsolution,
+        flux_solution_ratios=flux_solution_ratios,
+        flux_solution_diffs=flux_solution_diffs,
+        has_effects_gene=has_effects_gene,
         disease_genes=disease_up_file,
     )
-    gene_pairs_up.to_csv(os.path.join(output_dir, f"{context}_Gene_Pairs_Inhi_Fratio_UP.txt"), index=False)
-    d_score_down = score_gene_pairs(gene_pairs_down, os.path.join(output_dir, f"{context}_d_score_DOWN.csv"),
-                                    input_reg="down")
-    d_score_up = score_gene_pairs(gene_pairs_up, os.path.join(output_dir, f"{context}_d_score_UP.csv"), input_reg="up")
+    gene_pairs_up.to_csv(
+        os.path.join(output_dir, f"{context}_Gene_Pairs_Inhi_Fratio_UP.txt"),
+        index=False,
+    )
+    d_score_down = score_gene_pairs(
+        gene_pairs=gene_pairs_down,
+        filename=os.path.join(output_dir, f"{context}_d_score_DOWN.csv"),
+        input_reg="down",
+        downreg_flux_cutoff=downreg_flux_cutoff,
+        upreg_flux_cutoff=upreg_flux_cutoff,
+    )
+    d_score_up = score_gene_pairs(
+        gene_pairs_up,
+        os.path.join(output_dir, f"{context}_d_score_UP.csv"),
+        input_reg="up",
+        downreg_flux_cutoff=downreg_flux_cutoff,
+        upreg_flux_cutoff=upreg_flux_cutoff,
+    )
     pertubation_effect_score = (d_score_up + d_score_down).sort_values(by="score", ascending=False)
     pertubation_effect_score.to_csv(os.path.join(output_dir, f"{context}_d_score.csv"))
     pertubation_effect_score.reset_index(drop=False, inplace=True)
