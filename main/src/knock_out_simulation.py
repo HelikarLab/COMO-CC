@@ -1,18 +1,17 @@
 #!/usr/bin/python3
 import argparse
 import multiprocessing as mp
-import multiprocessing.pool
 import os
 import re
 import sys
+from multiprocessing.pool import ApplyResult
 from pathlib import Path
-from typing import Union
+from typing import Literal, Union
 
 import cobra
 import numpy as np
 import pandas as pd
 from fast_bioservices import BioDBNet, Input, Output
-
 from project import Configs
 
 configs = Configs()
