@@ -510,17 +510,23 @@ def main(argv):
         help="Use BioDBNet cache",
     )
     
-    args = parser.parse_args()
-    tissue_spec_model_file = args.model
-    context = args.context
-    disease = args.disease
-    disease_up_file = args.disease_up
-    disease_down_file = args.disease_down
-    raw_drug_filename = args.raw_drug_file
-    ref_flux_file = args.ref_flux_file
-    test_all = args.test_all
-    pars_flag = args.pars_flag
-    solver = args.solver
+    args: argparse.Namespace = parser.parse_args()
+    tissue_spec_model_file: str = args.model
+    taxon_id: int = args.taxon_id
+    context: str = args.context
+    disease: str = args.disease
+    disease_up_file: str = args.disease_up
+    disease_down_file: str = args.disease_down
+    raw_drug_filename: str = args.raw_drug_file
+    ref_flux_file: str = args.ref_flux_file
+    test_all: bool = args.test_all
+    pars_flag: bool = args.pars_flag
+    solver: str = args.solver
+    knockout_method: knockout_method_options = args.knockout_method
+    downreg_flux_cutoff: float = args.downreg_flux_cutoff
+    upreg_flux_cutoff: float = args.upreg_flux_cutoff
+    show_biodbnet_progress: bool = args.show_biodbnet_progress
+    use_biodbnet_cache: bool = args.use_biodbnet_cache
     
     output_dir = os.path.join(configs.data_dir, "results", context, disease)
     inhibitors_file = os.path.join(output_dir, f"{context}_{disease}_inhibitors.tsv")
