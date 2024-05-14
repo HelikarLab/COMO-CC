@@ -290,7 +290,7 @@ def load_Inhi_Fratio(filepath):
     return temp2
 
 
-def repurposing_hub_preproc(drug_file):
+def repurposing_hub_preproc(drug_file, biodbnet: BioDBNet, taxon_id: int):
     drug_db = pd.read_csv(drug_file, sep="\t")
     drug_db_new = pd.DataFrame()
     for index, row in drug_db.iterrows():
@@ -315,7 +315,6 @@ def repurposing_hub_preproc(drug_file):
             )
     drug_db_new.reset_index(inplace=True)
     
-    biodbnet = BioDBNet()
     entrez_ids = biodbnet.db2db(
         input_values=drug_db_new["Target"].tolist(),
         input_db=Input.GENE_SYMBOL,
@@ -329,9 +328,8 @@ def repurposing_hub_preproc(drug_file):
     return drug_db_new
 
 
-def drug_repurposing(drug_db, d_score):
+def drug_repurposing(drug_db, d_score, biodbnet: BioDBNet, taxon_id: int):
     d_score["Gene"] = d_score["Gene"].astype(str)
-    biodbnet = BioDBNet()
     d_score_gene_sym = biodbnet.db2db(
         input_values=d_score["Gene"].tolist(),
         input_db=Input.GENE_ID,
@@ -445,7 +443,39 @@ def main(argv):
         default="glpk",
         choices=["gurobi", "glpk"],
         dest="solver",
-        help="The solver to use for FBA. Options are: gurobi or glpk"
+        help="The solver to use for FBA",
+    )
+    parser.add_argument(
+        "--downreg-flux-cutoff",
+        type=float,
+        required=False,
+        default=0.9,
+        dest="downreg_flux_cutoff",
+        help="Fluxes less than this are considered down-regulated",
+    )
+    parser.add_argument(
+        "--upreg-flux-cutoff",
+        type=float,
+        required=False,
+        default=1.1,
+        dest="upreg_flux_cutoff",
+        help="Fluxes greater than this are considered up-regulated",
+    )
+    parser.add_argument(
+        "--show-biodbnet-progress",
+        action="store_true",
+        required=False,
+        default=False,
+        dest="show_biodbnet_progress",
+        help="Show progress of BioDBNet queries",
+    )
+    parser.add_argument(
+        "--use-biodbnet-cache",
+        action="store_true",
+        required=False,
+        default=False,
+        dest="use_biodbnet_cache",
+        help="Use BioDBNet cache",
     )
     
     args = parser.parse_args()
@@ -477,13 +507,14 @@ def main(argv):
         raise NameError("reference model format must be .xml, .mat, or .json")
     
     cobra_model.solver = solver
+
+    biodbnet = BioDBNet(show_progress=show_biodbnet_progress, cache=use_biodbnet_cache)
     
     # preprocess repurposing hub data
     raw_drug_filepath = os.path.join(configs.data_dir, raw_drug_filename)
     reformatted_drug_file = os.path.join(configs.data_dir, "Repurposing_Hub_Preproc.tsv")
     if not os.path.isfile(reformatted_drug_file):
-        print("Preprocessing raw Repurposing Hub DB file...")
-        drug_db = repurposing_hub_preproc(raw_drug_filepath)
+        drug_db = repurposing_hub_preproc(drug_file=raw_drug_filepath, biodbnet=biodbnet, taxon_id=taxon_id)
         drug_db.to_csv(reformatted_drug_file, index=False, sep="\t")
         print(f"Preprocessed Repurposing Hub tsv file written to:\n{reformatted_drug_file}")
     else:
