@@ -8,7 +8,7 @@ import sys
 from collections import Counter
 from pathlib import Path
 
-import microarray_gen
+import numpy as np
 import pandas as pd
 from fast_bioservices import BioDBNet, Input, Output
 
@@ -57,6 +57,109 @@ class _HighExpressionHeaderNames:
     TRNASEQ = f"{_MergedHeaderNames.TRNASEQ}_high"
     MRNASEQ = f"{_MergedHeaderNames.MRNASEQ}_high"
     SCRNASEQ = f"{_MergedHeaderNames.SCRNASEQ}_high"
+
+
+def mergeLogicalTable(df_results):
+    """
+    Merge the Rows of Logical Table belongs to the same ENTREZ_GENE_ID
+    :param df_results:
+    :return: pandas dataframe of merged table
+    """
+    # step 1: get all plural ENTREZ_GENE_IDs in the input table, extract unique IDs
+    df_results.reset_index(drop=False, inplace=True)
+    df_results["ENTREZ_GENE_ID"] = df_results["ENTREZ_GENE_ID"].astype(str)
+    df_results["ENTREZ_GENE_ID"] = df_results["ENTREZ_GENE_ID"].str.replace(
+        " /// ", "//"
+    )
+    id_list = []
+    df_results.dropna(axis=0, subset=["ENTREZ_GENE_ID"], inplace=True)
+    entrez_single_id_list = df_results[
+        ~df_results["ENTREZ_GENE_ID"].str.contains("//")
+    ]["ENTREZ_GENE_ID"].tolist()
+    entrez_id_list = df_results[df_results["ENTREZ_GENE_ID"].str.contains("//")][
+        "ENTREZ_GENE_ID"
+    ].tolist()
+    for entrez_id in entrez_id_list:
+        entrez_ids = entrez_id.split("//")
+        id_list.extend(entrez_ids)
+        df_dups = pd.DataFrame(
+            [], columns=list(df_results), index=list(range(len(entrez_ids)))
+        )
+        dup_rows = pd.DataFrame([])
+        for eid in entrez_ids:
+            rows = df_results.loc[df_results["ENTREZ_GENE_ID"] == entrez_id].copy()
+            rows["ENTREZ_GENE_ID"] = eid
+            dup_rows = pd.concat([dup_rows, rows], axis=0)
+        df_results = pd.concat(
+            [df_results, pd.DataFrame(dup_rows)], axis=0, ignore_index=True
+        )
+        
+        df_results.drop(
+            df_results[df_results["ENTREZ_GENE_ID"] == entrez_id].index, inplace=True
+        )
+    
+    common_elements = list(set(entrez_single_id_list).intersection(set(id_list)))
+    dups = [x for x in id_list if id_list.count(x) > 1]
+    
+    full_entre_id_sets = []
+    cnt = 0
+    entrez_dups_list = []
+    idx_list = list(range(len(entrez_id_list)))
+    
+    for idx1 in range(len(entrez_id_list)):
+        if idx1 not in idx_list:
+            continue
+        
+        set1 = set(entrez_id_list[idx1].split("//"))
+        idx_list.remove(idx1)
+        toremove = []
+        
+        for idx2 in idx_list:
+            set2 = set(entrez_id_list[idx2].split("//"))
+            intersect = set1.intersection(set2)
+            if bool(intersect):
+                set1 = set1.union(set2)
+                toremove.append(idx2)
+        
+        for idx3 in toremove:
+            idx_list.remove(idx3)
+        
+        sortlist = list(set1)
+        sortlist.sort(key=int)
+        new_entrez_id = " /// ".join(sortlist)
+        full_entre_id_sets.append(new_entrez_id)
+    
+    full_entre_id_sets = list(set(full_entre_id_sets))
+    
+    for full_entrez_id in full_entre_id_sets:
+        singles = full_entrez_id.split(" /// ")
+        entrez_dups_list.append(singles)
+        cnt += 1
+    
+    entrez_dups_dict = dict(zip(full_entre_id_sets, entrez_dups_list))
+    
+    for merged_entrez_id, entrez_dups_list in entrez_dups_dict.items():
+        df_results["ENTREZ_GENE_ID"].replace(
+            to_replace=entrez_dups_list, value=merged_entrez_id, inplace=True
+        )
+    
+    df_results.set_index("ENTREZ_GENE_ID", inplace=True)
+    df_output = df_results.fillna(-1).groupby(level=0).max()
+    df_output.replace(-1, np.nan, inplace=True)
+    
+    # TODO: Test if this is working properly
+    """
+    There seems to be an error when running Step 2.1 in the pipeline.ipynb file
+    The commented-out return statement tries to return the df_output dataframe values as integers, but NaN values exist
+        Because of this, it is unable to do so.
+    If we change this to simply output the database, the line "np.where(posratio >= top_proportion . . ." (line ~162)
+        Fails because it is comparing floats and strings
+
+    I am unsure what to do in this situation
+    """
+    
+    # return df_output.astype(int)
+    return df_output
 
 
 def get_transcriptmoic_details(merged_df: pd.DataFrame) -> pd.DataFrame:
@@ -190,7 +293,6 @@ def merge_xomics(
     """
     print(f"Merging data for {context_name}")
     # load data for each source if it exists. IF not load an empty dummy dataset
-    microarray = microarray_gen.load_microarray_tests(filename=microarray_file, context_name=context_name)
     proteomics = proteomics_gen.load_proteomics_tests(filename=proteomics_file, context_name=context_name)
     trnaseq = rnaseq_gen.load_rnaseq_tests(filename=trnaseq_file, context_name=context_name,
                                            lib_type="total")  # total RNA-seq
@@ -216,23 +318,6 @@ def merge_xomics(
             inplace=True
         )
         merge_data = prote_data
-    
-    if microarray[0] != "dummy":
-        exp_list.append(_ExpressedHeaderNames.MICROARRAY)
-        high_list.append(_HighExpressionHeaderNames.MICROARRAY)
-        micro_data = microarray[1].loc[:, ["expressed", "high"]]
-        micro_data.rename(
-            columns={
-                "expressed": _ExpressedHeaderNames.MICROARRAY,
-                "high": _HighExpressionHeaderNames.MICROARRAY
-            },
-            inplace=True
-        )
-        
-        if "merge_data" not in locals():
-            merge_data = micro_data
-        else:
-            merge_data = merge_data.join(micro_data, how="outer")
     
     if trnaseq[0] != "dummy":
         exp_list.append(_ExpressedHeaderNames.TRNASEQ)
@@ -282,7 +367,7 @@ def merge_xomics(
         else:
             merge_data = merge_data.join(scrnaseq_data, how="outer")
     
-    merge_data = microarray_gen.mergeLogicalTable(merge_data)
+    merge_data = mergeLogicalTable(merge_data)
     
     num_sources = len(exp_list)
     merge_data["Active"] = 0
