@@ -518,23 +518,10 @@ save_rnaseq_tests <- function(
     }
     
     sample_metrics <- read_counts_matrix(counts_matrix_file, config_file, info_file, context_name) # read count matrix
-    entrez_all <- sample_metrics[[1]][["Entrez"]] #get entrez ids
-    
     sample_metrics <- filter_counts(sample_metrics, technique, filt_options, context_name, prep) # normalize and filter count
+    
     expressedGenes <- c()
     topGenes <- c()
-    for (i in 1:length(sample_metrics)) { # get high confidence and expressed genes for each study/batch number
-        expressedGenes <- c(expressedGenes, sample_metrics[[i]][["Entrez"]])
-        topGenes <- c(topGenes, sample_metrics[[i]][["Entrez_hc"]])
-    }
-    sample_metrics <- read_counts_matrix(counts_matrix_file, config_file, info_file, context_name) # read count matrix
-    
-    entrez_all <- sample_metrics[[1]][["Entrez"]] #get entrez ids
-    
-    sample_metrics <- filter_counts(sample_metrics, technique, filt_options, context_name, prep) # normalize and filter count
-    expressedGenes <- c()
-    topGenes <- c()
-    
     for (i in 1:length(sample_metrics)) { # get high confidence and expressed genes for each study/batch number
         expressedGenes <- c(expressedGenes, sample_metrics[[i]][["Entrez"]])
         topGenes <- c(topGenes, sample_metrics[[i]][["Entrez_hc"]])
@@ -552,6 +539,7 @@ save_rnaseq_tests <- function(
     sample_metrics[["TopGenes"]] <- as.character(topMat$topGenes[topMat$Prop >= batch_ratio_high])
     
     # create a table to write gene expression and high confidence to
+    entrez_all <- sample_metrics[[1]][["Entrez"]] #get entrez ids
     write_table <- data.frame(entrez_all)
     write_table <- cbind(write_table, rep(0, nrow(write_table)))
     for (i in 1:nrow(write_table)) {
