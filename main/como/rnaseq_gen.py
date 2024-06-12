@@ -1,17 +1,20 @@
 #!/usr/bin/python3
 
 import argparse
-from enum import Enum
 import os
 import re
 import sys
+from enum import Enum
 from pathlib import Path
 from typing import Optional
 
 import pandas as pd
+import rpy2_api
 
-from como import rpy2_api
-from como.project import Config
+# from como import rpy2_api
+from project import Config
+
+# from como.project import Config
 from rpy2.robjects import pandas2ri
 
 # enable r to py conversion
@@ -58,7 +61,7 @@ def load_rnaseq_tests(filename, context_name, lib_type):
         filename = f"rnaseq_scrna_{context_name}.csv"
     else:
         print(
-            f"Unsupported RNA-seq library type: {lib_type}. Must be one of 'total', 'mrna', 'sc'."
+            f"Unsupported RNA-seq library type: {lib_type}. Must be one of 'total', 'mrna', 'scrna'."
         )
         sys.exit()
     
@@ -126,7 +129,7 @@ def handle_context_batch(
         
         print(f"Gene info:\t\t{gene_info_filepath}")
         print(f"Count matrix:\t\t{rnaseq_input_filepath}")
-        
+
         rpy2_api.Rpy2(
             r_file_path=r_file_path,
             counts_matrix_file=rnaseq_input_filepath,
