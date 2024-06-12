@@ -18,9 +18,13 @@ zz <- file(file.path(r_log_directory, "rnaseq.Rout"), open = "wt")
 sink(zz, type = "message")
 
 read_counts_matrix <- function(counts_matrix_filepath, config_filepath, info_filepath, context_name) {
-    config_object <- read_excel(config_filepath, sheet = context_name) # read configuration sheet
-    counts_matrix <- read.csv(counts_matrix_filepath, header = TRUE) %>% arrange(., genes) # read counts matrix
+    counts_matrix <- read.csv(counts_matrix_filepath, header = TRUE)
+    colnames(counts_matrix)[1] <- "genes"
+    counts_matrix <- counts_matrix %>% arrange(genes)
     
+    config_object <- read_excel(config_filepath, sheet = context_name) # read configuration sheet
+    
+    print(paste0("Reading info_filepath", info_filepath))
     gene_info <- read.csv(info_filepath) %>%
       mutate(size = end_position - start_position) %>%
       arrange(., ensembl_gene_id) %>%
@@ -29,7 +33,6 @@ read_counts_matrix <- function(counts_matrix_filepath, config_filepath, info_fil
     counts_matrix <- counts_matrix[(gene_info$entrezgene_id != "-"),] # remove unnamed genes
     gene_info <- gene_info[(gene_info$entrezgene_id != "-"),]  # remove unnamed genes
     genes <- gene_info$entrezgene_id  # get gene names
-    
     # remove version numbers from ensembl id
     for (i in seq_along(genes)) {
         row <- genes[i]
@@ -41,7 +44,6 @@ read_counts_matrix <- function(counts_matrix_filepath, config_filepath, info_fil
     
     sample_metrics <- list()
     groups <- unique(config_object$Group)
-    
     # initialize groups
     for (group in groups) {
         sample_metrics[[group]][["CountMatrix"]] <- genes
@@ -56,58 +58,40 @@ read_counts_matrix <- function(counts_matrix_filepath, config_filepath, info_fil
         group <- config_object$Group[i]
         
         # These values will be added to the SampMetrix object
+        # If `entry` is not in `counts_matrix`, stop and show error
+        if (!(entry %in% colnames(counts_matrix))) { stop(paste(entry, "not found in count matrix.")) }
+        
         matrix_value <- counts_matrix[, entry]
         fragment_length_value <- config_object$FragmentLength[i]
         layout_value <- config_object$Layout[i]
         sample_name_value <- entry
-        
         
         # In case insert_size is NULL, set it to 0
         if (is.na(fragment_length_value)) {
             fragment_length_value <- 0
         }
         
-        if (entry %in% colnames(counts_matrix)) {
-            
-            # get init values
-            sample_matrix <- sample_metrics[[group]][["CountMatrix"]]
-            fragment_lengths <- sample_metrics[[group]][["FragmentLengths"]]
-            sample_names <- sample_metrics[[group]][["SampleNames"]]
-            layouts <- sample_metrics[[group]][["Layout"]]
-            
-            # add replicate to values
-            sample_matrix <- cbind(sample_matrix, matrix_value)
-            fragment_lengths <- c(fragment_lengths, fragment_length_value)
-            layouts <- c(layouts, layout_value)
-            sample_names <- c(sample_names, sample_name_value)
-            
-            # update values
-            sample_metrics[[group]][["CountMatrix"]] <- sample_matrix
-            sample_metrics[[group]][["FragmentLengths"]] <- fragment_lengths
-            sample_metrics[[group]][["SampleNames"]] <- sample_names
-            sample_metrics[[group]][["Layout"]] <- layouts
-            
-            
-        } else {
-            print(paste(c(entry, " not found in count matrix."), collapse = "")) # inform that a sample is missing
-        }
+        # update values based on replicate (i.e., S1R1) values
+        sample_metrics[[group]][["CountMatrix"]] <- cbind(sample_metrics[[group]][["CountMatrix"]], matrix_value)
+        sample_metrics[[group]][["FragmentLengths"]] <- c(sample_metrics[[group]][["FragmentLengths"]], fragment_length_value)
+        sample_metrics[[group]][["SampleNames"]] <- c(sample_metrics[[group]][["SampleNames"]], sample_name_value)
+        sample_metrics[[group]][["Layout"]] <- c(sample_metrics[[group]][["Layout"]], layout_value)
     }
     
     for (group in groups) { # for each study/batch group
-        samp_mat <- sample_metrics[[group]][["CountMatrix"]]
-        samp_mat <- samp_mat[, -1]
-        samp_mat <- sapply(data.frame(samp_mat), as.numeric)
-        samp_mat <- as.matrix(samp_mat) # convert df to matrix
-        # samp_mat <- t(samp_mat)
+        group_count_matrix <- sample_metrics[[group]][["CountMatrix"]]
+        group_count_matrix <- group_count_matrix[, -1]
+        group_count_matrix <- as.matrix(group_count_matrix)
         
-        colnames(samp_mat) <- sample_metrics[[group]][["SampleNames"]] # set column names to sample names
-        sample_metrics[[group]][["CountMatrix"]] <- samp_mat # update counts matrix
-        sample_metrics[[group]][["NumSamples"]] <- ncol(samp_mat) # set number of samples
+        colnames(group_count_matrix) <- sample_metrics[[group]][["SampleNames"]] # set column names to sample names
+        sample_metrics[[group]][["CountMatrix"]] <- group_count_matrix # update counts matrix
+        sample_metrics[[group]][["NumSamples"]] <- ncol(group_count_matrix) # set number of samples
         sample_metrics[[group]][["Entrez"]] <- as.character(gene_info$entrezgene_id) # store entrez ids
         sample_metrics[[group]][["GeneSizes"]] <- gene_info$size # store gene size
         sample_metrics[[group]][["StudyNumber"]] <- group
     }
     
+    cat("Finished reading count matrices\n")
     return(sample_metrics)
 }
 
@@ -371,35 +355,37 @@ umi_filter <- function(sample_metrics, filt_options, context_name) {
     #sample_metrics <- calculate_fpkm(sample_metrics)
     for (i in 1:length(sample_metrics)) {
         study_number <- sample_metrics[[i]][["StudyNumber"]]
-        ent <- sample_metrics[[i]][["Entrez"]] # get entrez ids
-        umat <- sample_metrics[[i]][["CountMatrix"]] # get fpkm matrix
-        udf <- data.frame(umat) # convert to df
-        udf[rowSums(udf[]) > 0,]
-        minimums <- udf == 0
-        nas <- is.na(udf) == 1
-        zmat <- zFPKM(udf, min_thresh = 0, assayName = "UMI") # calculate zFPKM
-        zmat[minimums] <- -4 # instead of -inf set to lower limit
-        zumi_fname <- file.path(work_dir, "data", "results", context_name, prep, paste0("zUMI_Matrix_", prep, "_", study_number, ".csv"))
-        # zumi_fname <- file.path("/home", username, "main", "data", "results", context_name, prep, paste0("zUMI_Matrix_", prep, "_", study_number, ".csv"))
+        entrez_genes <- sample_metrics[[i]][["Entrez"]]
+        count_matrix <- sample_metrics[[i]][["CountMatrix"]]
+        count_matrix_df <- data.frame(count_matrix)
+        count_matrix_df[rowSums(count_matrix_df[]) > 0,]
+        minimums <- count_matrix_df == 0
+        nas <- is.na(count_matrix_df) == 1
+    
+        if (nrow(count_matrix_df) == 0) { stop("Empty count matrix (`count_matrix_df`) in `umi_filter` function") }
         
-        write_zumi <- cbind(ent, zmat)
+        udf_numeric <- as.data.frame(lapply(count_matrix_df, as.numeric))
+        zmat <- zFPKM(as.numeric(udf_numeric), min_thresh = 0, assayName = "UMI") # calculate zFPKM
+        zmat[minimums] <- -4 # Set `-inf` values to `-4` to prevent calculations on `-inf` datapoints
+        zumi_fname <- file.path(work_dir, "data", "results", context_name, prep, paste0("zUMI_Matrix_", prep, "_", study_number, ".csv"))
+        
+        write_zumi <- cbind(entrez_genes, zmat)
         colnames(write_zumi)[1] <- "ENTREZ_GENE_ID"
         write.csv(write_zumi, zumi_fname, row.names = FALSE)
         
         zumi_plot_dir <- file.path(work_dir, "data", "results", context_name, prep, "figures")
-        # zumi_plot_dir <- file.path("/home", username, "main", "data", "results", context_name, prep, "figures")
         
         if (!file.exists(zumi_plot_dir)) {
             dir.create(zumi_plot_dir)
         }
         
         batch_size <- 12
-        plot_batches <- ceiling(ncol(udf) / batch_size)
+        plot_batches <- ceiling(ncol(count_matrix_df) / batch_size)
         
         if (plot_batches < 2) {
             zumi_plotname <- file.path(zumi_plot_dir, paste0("zumi_plot_", study_number, ".pdf"))
             pdf(zumi_plotname)
-            zFPKMPlot(udf, min_thresh = min(udf), assayName = "UMI")
+            zFPKMPlot(count_matrix_df, min_thresh = min(count_matrix_df), assayName = "UMI")
             dev.off()
             
         } else {
@@ -412,12 +398,12 @@ umi_filter <- function(sample_metrics, filt_options, context_name) {
                 jmax <- batch_size * j
                 samps <- jmin:jmax
                 
-                while (samps[length(samps)] > ncol(udf)) {
+                while (samps[length(samps)] > ncol(count_matrix_df)) {
                     samps <- samps[1:length(samps) - 1]
                 }
                 
                 zFPKMPlot(
-                  udf[, samps],
+                  count_matrix_df[, samps],
                   min_thresh = 0,
                   assayName = "UMI"
                 )
@@ -432,15 +418,14 @@ umi_filter <- function(sample_metrics, filt_options, context_name) {
         f1 <- genefilter::kOverA(min.samples, cutoff)
         flist <- genefilter::filterfun(f1)
         keep <- genefilter::genefilter(zmat, flist)
-        sample_metrics[[i]][["Entrez"]] <- ent[keep]
+        sample_metrics[[i]][["Entrez"]] <- entrez_genes[keep]
         
         # top percentile genes
         f1_top <- genefilter::kOverA(top.samples, cutoff)
         flist_top <- genefilter::filterfun(f1_top)
         keep_top <- genefilter::genefilter(zmat, flist_top)
         
-        sample_metrics[[i]][["Entrez_hc"]] <- ent[keep_top]
-        
+        sample_metrics[[i]][["Entrez_hc"]] <- entrez_genes[keep_top]        
     }
     
     return(sample_metrics)
