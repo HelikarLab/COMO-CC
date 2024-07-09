@@ -373,6 +373,32 @@ def map_expression_to_rxn(model_cobra, gene_expression_file, recon_algorithm, lo
     return expression_rxns, expr_vector
 
 
+def validate_boundary_rxns_in_reference_model(
+    model: cobra.Model,
+    boundary_rxns: list[str],
+) -> None:
+    """
+    This function validates that the boundary reactions are in the reference model
+
+    Parameters
+    ----------
+    model : cobra.Model
+        The reference model being used to build the context
+    boundary_rxns : list[str]
+        The list of boundary reactions to validate
+
+    Raises
+    ------
+    ValueError
+        If the boundary reactions are not in the reference model
+    """
+    for boundary_rxn in boundary_rxns:
+        if boundary_rxn not in model.reactions:
+            raise ValueError(
+                f"The boundary reaction {boundary_rxn} is not in the reference model"
+            )
+
+
 def _create_context_specific_model(
     general_model_file,
     gene_expression_file,
