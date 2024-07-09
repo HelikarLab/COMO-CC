@@ -434,35 +434,37 @@ def _create_context_specific_model(
     
     if objective not in force_rxns:
         force_rxns.append(objective)
-    
+
     # set boundaries
+    validate_boundary_rxns_in_reference_model(cobra_model, bound_rxns)
     cobra_model, bound_rm_rxns = set_boundaries(
         cobra_model, bound_rxns, bound_lb, bound_ub
     )
-    
+
     # set solver
     cobra_model.solver = solver.lower()
-    
+
     # check number of unsolvable reactions for reference model under media assumptions
     # incon_rxns, cobra_model = feasibility_test(cobra_model, "before_seeding")
     incon_rxns = []
-    
+
     # CoBAMP methods
-    cobamp_model = COBRAModelObjectReader(cobra_model)  # load model in readable format for CoBAMP
+    # load model in readable format for CoBAMP
+    cobamp_model = COBRAModelObjectReader(cobra_model)
     cobamp_model.get_irreversibilities(True)
     s_matrix = cobamp_model.get_stoichiometric_matrix()
     lb, ub = cobamp_model.get_model_bounds(False, True)
     rx_names = cobamp_model.get_reaction_and_metabolite_ids()[0]
-    
+
     # get expressed reactions
     expression_rxns, expr_vector = map_expression_to_rxn(
         cobra_model,
         gene_expression_file,
         recon_algorithm,
         high_thresh=high_thresh,
-        low_thresh=low_thresh
+        low_thresh=low_thresh,
     )
-    
+
     # find reactions in the force reactions file that are not in general model and warn user
     for rxn in force_rxns:
         if rxn not in rx_names:
@@ -470,13 +472,13 @@ def _create_context_specific_model(
                 f"{rxn} from force reactions not in general model, check BiGG (or relevant database used in your "
                 "general model) for synonyms"
             )
-    
+
     # collect list of reactions that are infeasible but active in expression data or user defined
     infeas_exp_rxns = []
     infeas_force_rxns = []
     infeas_exp_cnt = 0
     infeas_force_cnt = 0
-    
+
     for idx, (rxn, exp) in enumerate(expression_rxns.items()):
         # log reactions in expressed and force lists that are infeasible that the user may wish to review
         if rxn in incon_rxns and expr_vector[idx] == 1:
@@ -485,10 +487,10 @@ def _create_context_specific_model(
         if rxn in incon_rxns and rxn in force_rxns:
             infeas_force_cnt += 1
             infeas_force_rxns.append(rxn)
-        
+
         # make changes to expressed reactions base on user defined force/exclude reactions
         # TODO: if not using bound reactions file, add two sets of exchange reactoins to be put in either low or mid bin
-        
+
         if rxn in force_rxns:
             expr_vector[idx] = (
                 high_thresh + 0.1 if recon_algorithm in ["TINIT", "IMAT"] else 1
@@ -497,12 +499,12 @@ def _create_context_specific_model(
             expr_vector[idx] = (
                 low_thresh - 0.1 if recon_algorithm in ["TINIT", "IMAT"] else 0
             )
-    
+
     idx_obj = rx_names.index(objective)
     idx_force = [rx_names.index(rxn) for rxn in force_rxns if rxn in rx_names]
     exp_idx_list = [idx for (idx, val) in enumerate(expr_vector) if val > 0]
     exp_thresh = (low_thresh, high_thresh)
-    
+
     # switch case dictionary runs the functions making it too slow, better solution then elif ladder?
     if recon_algorithm == "GIMME":
         context_model_cobra = seed_gimme(
@@ -529,20 +531,30 @@ def _create_context_specific_model(
         model_reactions = [reaction.id for reaction in context_model_cobra.reactions]
         reaction_intersections = set(imat_reactions).intersection(model_reactions)
         flux_df = flux_df[~flux_df["rxn"].isin(reaction_intersections)]
-        flux_df.to_csv(str(os.path.join(config.data_dir, "results", context_name, f"{recon_algorithm}_flux.csv")))
-    
+        flux_df.to_csv(
+            str(
+                os.path.join(
+                    config.data_dir,
+                    "results",
+                    context_name,
+                    f"{recon_algorithm}_flux.csv",
+                )
+            )
+        )
+
     elif recon_algorithm == "TINIT":
         context_model_cobra = seed_tinit(
             cobra_model, s_matrix, lb, ub, expr_vector, solver, idx_force
         )
     else:
         raise ValueError(
-            f"Unsupported reconstruction algorithm: {recon_algorithm}. Must be 'IMAT', 'GIMME', or 'FASTCORE'")
-    
+            f"Unsupported reconstruction algorithm: {recon_algorithm}. Must be 'IMAT', 'GIMME', or 'FASTCORE'"
+        )
+
     # check number of unsolvable reactions for seeded model under media assumptions
     # incon_rxns_cs, context_model_cobra = feasibility_test(context_model_cobra, "after_seeding")
     incon_rxns_cs = []
-    
+
     # if recon_algorithm in ["IMAT"]:
     #     final_rxns = [rxn.id for rxn in context_model_cobra.reactions]
     #     imat_rxns = flux_df.rxn
@@ -551,7 +563,7 @@ def _create_context_specific_model(
     #             flux_df = flux_df[flux_df.rxn != rxn]
     #
     #     flux_df.to_csv(os.path.join(configs.datadir, "results", context_name, f"{recon_algorithm}_flux.csv"))
-    
+
     incon_df = pd.DataFrame({"general_infeasible_rxns": list(incon_rxns)})
     infeas_exp_df = pd.DataFrame({"expressed_infeasible_rxns": infeas_exp_rxns})
     infeas_force_df = pd.DataFrame({"infeasible_rxns_in_force_list": infeas_exp_rxns})
@@ -567,7 +579,7 @@ def _create_context_specific_model(
         "ForceInfeasRxns",
         "ContextInfeasRxns",
     ]
-    
+
     return context_model_cobra, exp_idx_list, infeasible_df
 
 
@@ -600,19 +612,19 @@ def create_context_specific_model(
     config = Config()
     if not os.path.exists(reference_model):
         raise FileNotFoundError(f"Reference model not found at {reference_model}")
-    
+
     if not os.path.exists(genes_file):
         raise FileNotFoundError(f"Active genes file not found at {genes_file}")
-    
+
     print(f"Active Genes: {genes_file}")
-    
+
     boundary_rxns = []
     boundary_rxns_upper: list[float] = []
     boundary_rxns_lower: list[float] = []
-    
+
     if boundary_rxns_filepath:
         boundary_rxns_filepath: Path = Path(boundary_rxns_filepath)
-        
+
         print(f"Boundary Reactions: {str(boundary_rxns_filepath)}")
         if boundary_rxns_filepath.suffix == ".csv":
             df: pd.DataFrame = pd.read_csv(boundary_rxns_filepath, header=0, sep=",")
@@ -620,25 +632,31 @@ def create_context_specific_model(
             df: pd.DataFrame = pd.read_excel(boundary_rxns_filepath, header=0)
         else:
             raise FileNotFoundError(
-                f"Boundary reactions file not found! Must be a csv or Excel file. Searching for: {boundary_rxns_filepath}")
-        
+                f"Boundary reactions file not found! Must be a csv or Excel file. Searching for: {boundary_rxns_filepath}"
+            )
+
         # convert all columns to lowercase
         df.columns = [column.lower() for column in df.columns]
-        
+
         # Make sure the columns are named correctly. They should be "Reaction", "Abbreviation", "Compartment", "Minimum Reaction Rate", and "Maximum Reaction Rate"
         for column in df.columns:
-            if column not in ["reaction", "abbreviation", "compartment", "minimum reaction rate",
-                              "maximum reaction rate"]:
+            if column not in [
+                "reaction",
+                "abbreviation",
+                "compartment",
+                "minimum reaction rate",
+                "maximum reaction rate",
+            ]:
                 raise ValueError(
-                    f"Boundary reactions file must have columns named 'Reaction', 'Abbreviation', 'Compartment', 'Minimum Reaction Rate', and 'Maximum Reaction Rate'. Found: {column}")
-        
+                    f"Boundary reactions file must have columns named 'Reaction', 'Abbreviation', 'Compartment', 'Minimum Reaction Rate', and 'Maximum Reaction Rate'. Found: {column}"
+                )
+
         reaction_type: list[str] = df["reaction"].tolist()
         reaction_abbreviation: list[str] = df["abbreviation"].tolist()
         reaction_compartment: list[str] = df["compartment"].tolist()
         boundary_rxns_lower = df["minimum reaction rate"].tolist()
         boundary_rxns_upper = df["maximum reaction rate"].tolist()
-        
-        reaction_formula: list[str] = []
+
         for i in range(len(reaction_type)):
             current_type: str = reaction_type[i]
             temp_reaction: str = ""
@@ -654,7 +672,6 @@ def create_context_specific_model(
             shorthand_compartment = Compartments.get(reaction_compartment[i])
             temp_reaction += f"{reaction_abbreviation[i]}[{shorthand_compartment}]"
             boundary_rxns.append(temp_reaction)
-            # reaction_formula.append(temp_reaction)
         
         del df
     
