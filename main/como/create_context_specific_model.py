@@ -412,7 +412,7 @@ def _create_context_specific_model(
     solver,
     context_name,
     low_thresh,
-    high_thresh
+    high_thresh,
 ):
     """
     Seed a context specific model. Core reactions are determined from GPR associations with gene expression logicals.
@@ -421,11 +421,11 @@ def _create_context_specific_model(
     force excluded even if they meet GPR association requirements using the force exclude file.
     """
     config = Config()
-    if general_model_file[-4:] == ".mat":
+    if general_model_file.lower().endswith(".mat"):
         cobra_model = cobra.io.load_matlab_model(general_model_file)
-    elif general_model_file[-4:] == ".xml":
-        cobra_model = cobra.io.load_sbml_model(general_model_file)
-    elif general_model_file[-5:] == ".json":
+    elif general_model_file.lower().endswith((".xml", ".sbml")):
+        cobra_model = cobra.io.read_sbml_model(general_model_file)
+    elif general_model_file.lower().endswith(".json"):
         cobra_model = cobra.io.load_json_model(general_model_file)
     else:
         raise NameError("reference model format must be .xml, .mat, or .json")
