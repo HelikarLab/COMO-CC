@@ -86,13 +86,13 @@ def knock_out_simulation(
         dt_genes.dropna(axis=0, inplace=True)
         dt_genes.to_csv(inhibitors_filepath, header=False, sep="\t")
         print(f"Inhibitors file written to:\n{inhibitors_filepath}")
-    
-    gene_ind2genes = [x.id for x in model.genes]
-    gene_ind2genes = set(gene_ind2genes)
-    print(f"{len(gene_ind2genes)} genes in model")
-    DT_model = list(set(DT_genes["Gene ID"].tolist()).intersection(gene_ind2genes))
-    print(f"{len(DT_model)} genes can be targeted by drugs")
-    
+
+    gene_ind2genes = set(x.id for x in model.genes)
+    dt_model = list(set(dt_genes["Gene ID"].tolist()).intersection(gene_ind2genes))
+    print(
+        f"{len(gene_ind2genes)} genes in model, {len(dt_model)}  can be targeted by inhibitors"
+    )
+
     model_opt = cobra.flux_analysis.moma(model, solution=reference_solution).to_frame()
     model_opt[abs(model_opt) < 1e-8] = 0.0
     
@@ -103,13 +103,13 @@ def knock_out_simulation(
             gene_reaction_rule = rxn.gene_reaction_rule
             gene_ids = re.findall(r"\d+", gene_reaction_rule)
             for gene_id in gene_ids:
-                if gene_id == id_:
-                    boolval = "False"
-                else:
-                    # boolval = "{}".format(model.genes.get_by_id(gene_id)._functional)
-                    boolval = "{}".format(model.genes.get_by_id(gene_id).functional)
+                boolval = (
+                    "False"
+                    if gene_id == id_
+                    else str(model.genes.get_by_id(gene_id).functional)
+                )
                 gene_reaction_rule = gene_reaction_rule.replace(
-                    "{}".format(gene_id), boolval, 1
+                    old=gene_id, new=boolval, count=1
                 )
             if not eval(gene_reaction_rule) or test_all:
                 genes_with_metabolic_effects.append(id_)
