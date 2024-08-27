@@ -94,8 +94,8 @@ def knock_out_simulation(
     )
 
     model_opt = cobra.flux_analysis.moma(model, solution=reference_solution).to_frame()
-    model_opt[abs(model_opt) < 1e-8] = 0.0
-    
+    model_opt[abs(model_opt) < 1e-6] = 0.0
+
     genes_with_metabolic_effects = []
     for id_ in dt_model:
         gene: cobra.Gene = model.genes.get_by_id(id_)
