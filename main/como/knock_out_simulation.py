@@ -1,7 +1,5 @@
 #!/usr/bin/python3
 import argparse
-import multiprocessing as mp
-import multiprocessing.pool
 from concurrent.futures import Future, as_completed, ProcessPoolExecutor
 import os
 import re
@@ -115,7 +113,7 @@ def knock_out_simulation(
                 genes_with_metabolic_effects.append(id_)
                 break
 
-    num_cores: int = max(1, mp.cpu_count() - 2)
+    num_cores: int = max(1, os.cpu_count() - 2)
     futures: list[Future[tuple[str, pd.DataFrame]]] = []
     flux_solution: pd.DataFrame = pd.DataFrame()
     print(
