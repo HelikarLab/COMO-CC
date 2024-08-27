@@ -2,6 +2,7 @@
 import argparse
 import multiprocessing as mp
 import multiprocessing.pool
+from concurrent.futures import Future, as_completed, ProcessPoolExecutor
 import os
 import re
 import sys
@@ -123,46 +124,27 @@ def knock_out_simulation(
     
     # Require at least one core
     num_cores: int = max(1, mp.cpu_count() - 2)
-    pool: mp.Pool = mp.Pool(num_cores, initializer=initialize_pool, initargs=(synchronizer,))
-    
-    spacer: int = len(str(len(genes_with_metabolic_effects)))
+    futures: list[Future[tuple[str, pd.DataFrame]]] = []
     flux_solution: pd.DataFrame = pd.DataFrame()
-    
-    print(f"Found {len(genes_with_metabolic_effects)} genes with potentially-significant metabolic impacts\n")
-    import time
-    start = time.time()
-    
-    output: list[mp.pool.ApplyResult] = []
-    for id_ in genes_with_metabolic_effects:
-        output.append(
-            pool.apply_async(
-                _perform_knockout,
-                kwds={
-                    "spacer": spacer,
-                    "total_knockouts": len(genes_with_metabolic_effects),
-                    "model": model,
-                    "gene_id": id_,
-                    "reference_solution": reference_solution,
-                }
-            )
-        )
-    pool.close()
-    pool.join()
-    
+    print(
+        f"Found {len(genes_with_metabolic_effects)} genes with potentially-significant metabolic impacts\n"
+    )
+
+    with ProcessPoolExecutor(max_workers=num_cores) as executor:
+        for id_ in genes_with_metabolic_effects:
+            future = executor.submit(_perform_knockout, model, id_, reference_solution)
+            futures.append(future)
+
     gene_id: str
     knock_out_flux: pd.Series
-    for result in output:
-        gene_id, knock_out_flux = result.get()
+    for result in as_completed(futures):
+        gene_id, knock_out_flux = result.result()
         flux_solution[gene_id] = knock_out_flux
-    
-    end = time.time()
-    print(f"Time elapsed: {end - start} seconds (multi core)")
-    
-    # flux_solution
-    flux_solution[abs(flux_solution) < 1e-8] = 0.0
-    flux_solution_ratios = flux_solution.div(model_opt["fluxes"], axis=0)  # ko / original : inf means
-    flux_solution_diffs = flux_solution.sub(model_opt["fluxes"], axis=0)  # ko - original
-    
+
+    flux_solution[abs(flux_solution) < 1e-6] = 0.0
+    flux_solution_ratios = flux_solution.div(model_opt["fluxes"], axis=0)
+    flux_solution_diffs = flux_solution.sub(model_opt["fluxes"], axis=0)
+
     return (
         model,
         gene_ind2genes,
