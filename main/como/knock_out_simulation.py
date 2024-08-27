@@ -71,7 +71,7 @@ def knock_out_simulation(
 
     dt_genes: pd.DataFrame
     if inhibitors_filepath.exists():
-        print(f"Inhibitors file found at:\n{inhibitors_filepath}")
+        print(f"Inhibitors file found at: {inhibitors_filepath}")
         dt_genes = pd.read_csv(inhibitors_filepath, header=None, sep="\t")
         dt_genes.rename(columns={0: "Gene ID"}, inplace=True)
         dt_genes["Gene ID"] = dt_genes["Gene ID"].astype(str)
@@ -83,7 +83,7 @@ def knock_out_simulation(
         dt_genes.replace("-", np.nan, inplace=True)
         dt_genes.dropna(axis=0, inplace=True)
         dt_genes.to_csv(inhibitors_filepath, header=False, sep="\t")
-        print(f"Inhibitors file written to:\n{inhibitors_filepath}")
+        print(f"Inhibitors file written to: {inhibitors_filepath}")
 
     gene_ind2genes = set(x.id for x in model.genes)
     dt_model = list(set(dt_genes["Gene ID"].tolist()).intersection(gene_ind2genes))
@@ -106,22 +106,16 @@ def knock_out_simulation(
                     if gene_id == id_
                     else str(model.genes.get_by_id(gene_id).functional)
                 )
-                gene_reaction_rule = gene_reaction_rule.replace(
-                    old=gene_id, new=boolval, count=1
-                )
+                gene_reaction_rule = gene_reaction_rule.replace(gene_id, boolval, 1)
             if not eval(gene_reaction_rule) or test_all:
                 genes_with_metabolic_effects.append(id_)
                 break
+    print(f"Found {len(genes_with_metabolic_effects)} genes with potentially-significant metabolic impacts")  # fmt: skip
 
-    num_cores: int = max(1, os.cpu_count() - 2)
     futures: list[Future[tuple[str, pd.DataFrame]]] = []
     flux_solution: pd.DataFrame = pd.DataFrame()
-    print(
-        f"Found {len(genes_with_metabolic_effects)} genes with potentially-significant metabolic impacts\n"
-    )
-
-    with ProcessPoolExecutor(max_workers=num_cores) as executor:
-        for id_ in genes_with_metabolic_effects:
+    with ProcessPoolExecutor(max_workers=os.cpu_count()) as executor:
+        for id_ in genes_with_metabolic_effects[:10]:
             future = executor.submit(_perform_knockout, model, id_, reference_solution)
             futures.append(future)
 
@@ -262,7 +256,7 @@ def load_Inhi_Fratio(filepath):
     return temp2
 
 
-def repurposing_hub_preproc(drug_file):
+def repurposing_hub_preproc(drug_file, biodbnet: BioDBNet):
     drug_db = pd.read_csv(drug_file, sep="\t")
     drug_db_new = pd.DataFrame()
     for index, row in drug_db.iterrows():
@@ -287,7 +281,6 @@ def repurposing_hub_preproc(drug_file):
             )
     drug_db_new.reset_index(inplace=True)
 
-    biodbnet = BioDBNet()
     entrez_ids = biodbnet.db2db(
         input_values=drug_db_new["Target"].tolist(),
         input_db=Input.GENE_SYMBOL,
@@ -301,9 +294,8 @@ def repurposing_hub_preproc(drug_file):
     return drug_db_new
 
 
-def drug_repurposing(drug_db, d_score):
+def drug_repurposing(drug_db, d_score, biodbnet: BioDBNet):
     d_score["Gene"] = d_score["Gene"].astype(str)
-    biodbnet = BioDBNet()
     d_score_gene_sym = biodbnet.db2db(
         input_values=d_score["Gene"].tolist(),
         input_db=Input.GENE_ID,
@@ -434,6 +426,8 @@ def main(argv):
     output_dir = os.path.join(configs.data_dir, "results", context, disease)
     inhibitors_file = os.path.join(output_dir, f"{context}_{disease}_inhibitors.tsv")
 
+    biodbnet = BioDBNet(show_progress=False)
+
     print(f"Output directory: '{output_dir}'")
     print(f"Tissue Specific Model file is at: {tissue_spec_model_file}")
     print(f"Tissue specific inhibitors is at: {inhibitors_file}")
@@ -456,14 +450,16 @@ def main(argv):
     )
     if not os.path.isfile(reformatted_drug_file):
         print("Preprocessing raw Repurposing Hub DB file...")
-        drug_db = repurposing_hub_preproc(raw_drug_filepath)
+        drug_db = repurposing_hub_preproc(
+            drug_file=raw_drug_filepath, biodbnet=biodbnet
+        )
         drug_db.to_csv(reformatted_drug_file, index=False, sep="\t")
         print(
-            f"Preprocessed Repurposing Hub tsv file written to:\n{reformatted_drug_file}"
+            f"Preprocessed Repurposing Hub tsv file written to: {reformatted_drug_file}"
         )
     else:
         print(
-            f"Found preprocessed Repurposing Hub tsv file at:\n{reformatted_drug_file}"
+            f"Found preprocessed Repurposing Hub tsv file at: {reformatted_drug_file}"
         )
         drug_db = pd.read_csv(reformatted_drug_file, sep="\t")
 
@@ -534,12 +530,12 @@ def main(argv):
     pertubation_effect_score.reset_index(drop=False, inplace=True)
 
     # last step: output drugs based on d score
-    drug_score = drug_repurposing(drug_db, pertubation_effect_score)
+    drug_score = drug_repurposing(
+        drug_db=drug_db, d_score=pertubation_effect_score, biodbnet=biodbnet
+    )
     drug_score_file = os.path.join(output_dir, f"{context}_drug_score.csv")
     drug_score.to_csv(drug_score_file, index=False)
-    print(
-        "Gene D score mapped to repurposing drugs saved to\n{}".format(drug_score_file)
-    )
+    print(f"Gene D score mapped to repurposing drugs saved to {drug_score_file}")
 
     print(f"\nFinished {disease}!")
 
