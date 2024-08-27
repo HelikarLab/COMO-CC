@@ -114,18 +114,7 @@ def knock_out_simulation(
             if not eval(gene_reaction_rule) or test_all:
                 genes_with_metabolic_effects.append(id_)
                 break
-    """
-    Get the number of characters in the length of the number of genes
-    For example:
-        "1" for len(has_effects_gene) = 1 to 9
-        "2" for len(has_effects_gene) = 10 to 99
-        "3" for len(has_effects_gene) = 100 to 999
-    """
-    # Initialize the processing pool with a counter
-    # From: https://stackoverflow.com/questions/69907453Up
-    synchronizer = mp.Value("i", 0)
-    
-    # Require at least one core
+
     num_cores: int = max(1, mp.cpu_count() - 2)
     futures: list[Future[tuple[str, pd.DataFrame]]] = []
     flux_solution: pd.DataFrame = pd.DataFrame()
