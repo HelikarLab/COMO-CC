@@ -35,4 +35,3 @@ allow-direct-references=true
 pythonpath = [
     "main/src"
 ]
-
