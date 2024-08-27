@@ -156,29 +156,29 @@ def create_gene_pairs(
     disease_genes,
 ):
     disease_genes = pd.read_csv(str(os.path.join(datadir, disease_genes)))
-    DAG_dis_genes = pd.DataFrame()  # data analysis genes
-    DAG_dis_genes["Gene ID"] = disease_genes.iloc[:, 0].astype(str)
+    dag_dis_genes = pd.DataFrame()  # data analysis genes
+    dag_dis_genes["Gene ID"] = disease_genes.iloc[:, 0].astype(str)
     # DAG_dis_genes
-    DAG_dis_met_genes = set(DAG_dis_genes["Gene ID"].tolist()).intersection(
+    dag_dis_met_genes = set(dag_dis_genes["Gene ID"].tolist()).intersection(
         gene_ind2genes
     )
     # DAG_dis_met_genes
 
-    DAG_dis_met_rxn_ind = []
+    dag_dis_met_rxn_ind = []
     gene_i = []
-    for id_ in DAG_dis_met_genes:
+    for id_ in dag_dis_met_genes:
         gene = model.genes.get_by_id(id_)
         for rxn in gene.reactions:
-            DAG_dis_met_rxn_ind.append(rxn.id)
+            dag_dis_met_rxn_ind.append(rxn.id)
             gene_i.append(id_)
 
     # DAG_dis_met_rxn_ind
-    gene_df = pd.DataFrame(gene_i, columns=["Gene IDs"], index=DAG_dis_met_rxn_ind)
+    gene_df = pd.DataFrame(gene_i, columns=["Gene IDs"], index=dag_dis_met_rxn_ind)
     # gene_df
 
-    dag_rxn_flux_ratio: pd.DataFrame = flux_solution_ratios.loc[DAG_dis_met_rxn_ind]
-    dag_rxn_flux_diffs: pd.DataFrame = flux_solution_diffs.loc[DAG_dis_met_rxn_ind]
-    dag_rxn_flux_value: pd.DataFrame = flux_solution.loc[DAG_dis_met_rxn_ind]
+    dag_rxn_flux_ratio: pd.DataFrame = flux_solution_ratios.loc[dag_dis_met_rxn_ind]
+    dag_rxn_flux_diffs: pd.DataFrame = flux_solution_diffs.loc[dag_dis_met_rxn_ind]
+    dag_rxn_flux_value: pd.DataFrame = flux_solution.loc[dag_dis_met_rxn_ind]
     # dag_rxn_flux_ratio
 
     gene_mat_out = []
@@ -189,12 +189,12 @@ def create_gene_pairs(
         pegene = pd.DataFrame()
         pegene["Gene IDs"] = gene_df["Gene IDs"].copy()
         pegene["rxn_fluxRatio"] = dag_rxn_flux_ratio[id_].copy()
-        rxn_fluxDiffs = dag_rxn_flux_diffs[id_].copy()
-        rxn_fluxValue = dag_rxn_flux_value[id_].copy()
+        rxn_flux_diffs = dag_rxn_flux_diffs[id_].copy()
+        rxn_flux_value = dag_rxn_flux_value[id_].copy()
         pegene["Gene"] = id_
         pegene = pegene.loc[
             (~pegene["rxn_fluxRatio"].isna())
-            & (abs(rxn_fluxDiffs) + abs(rxn_fluxValue) > 1e-8)
+            & (abs(rxn_flux_diffs) + abs(rxn_flux_value) > 1e-8)
         ]
         # pegene.dropna(axis=0,subset=['rxn_fluxRatio'],inplace=True)
         pegene.index.name = "reaction"
@@ -322,9 +322,7 @@ def drug_repurposing(drug_db, d_score):
         d_score_new = pd.concat([d_score_new, drugs], ignore_index=True)
 
     d_score_new.drop_duplicates(inplace=True)
-    d_score_trim = d_score_new[
-        d_score_new["MOA"].str.lower().str.contains("inhibitor") == True
-    ]
+    d_score_trim = d_score_new[d_score_new["MOA"].str.lower().str.contains("inhibitor")]
 
     return d_score_trim
 
