@@ -165,7 +165,7 @@ def create_gene_pairs(
         gene_ind2genes
     )
     # DAG_dis_met_genes
-    
+
     DAG_dis_met_rxn_ind = []
     gene_i = []
     for id_ in DAG_dis_met_genes:
@@ -173,20 +173,20 @@ def create_gene_pairs(
         for rxn in gene.reactions:
             DAG_dis_met_rxn_ind.append(rxn.id)
             gene_i.append(id_)
-    
+
     # DAG_dis_met_rxn_ind
     gene_df = pd.DataFrame(gene_i, columns=["Gene IDs"], index=DAG_dis_met_rxn_ind)
     # gene_df
-    
+
     dag_rxn_flux_ratio: pd.DataFrame = flux_solution_ratios.loc[DAG_dis_met_rxn_ind]
     dag_rxn_flux_diffs: pd.DataFrame = flux_solution_diffs.loc[DAG_dis_met_rxn_ind]
     dag_rxn_flux_value: pd.DataFrame = flux_solution.loc[DAG_dis_met_rxn_ind]
     # dag_rxn_flux_ratio
-    
+
     gene_mat_out = []
     # gene_i = DAG_dis_met_genes
     # Rind_i = DAG_dis_met_rxn_ind
-    
+
     for id_ in has_effects_gene:
         pegene = pd.DataFrame()
         pegene["Gene IDs"] = gene_df["Gene IDs"].copy()
@@ -197,12 +197,12 @@ def create_gene_pairs(
         pegene = pegene.loc[
             (~pegene["rxn_fluxRatio"].isna())
             & (abs(rxn_fluxDiffs) + abs(rxn_fluxValue) > 1e-8)
-            ]
+        ]
         # pegene.dropna(axis=0,subset=['rxn_fluxRatio'],inplace=True)
         pegene.index.name = "reaction"
         pegene.reset_index(drop=False, inplace=True)
         gene_mat_out.append(pegene)
-    
+
     gene_pairs = pd.concat(gene_mat_out, ignore_index=True)
     return gene_pairs
 
@@ -213,15 +213,19 @@ def score_gene_pairs(gene_pairs, filename, input_reg):
     for p_gene in p_model_genes:
         data_p = gene_pairs.loc[gene_pairs["Gene"] == p_gene].copy()
         total_aff = data_p["Gene IDs"].unique().size
-        n_aff_down = data_p.loc[abs(data_p["rxn_fluxRatio"]) < 0.9, "Gene IDs"].unique().size
-        n_aff_up = data_p.loc[abs(data_p["rxn_fluxRatio"]) > 1.1, "Gene IDs"].unique().size
+        n_aff_down = (
+            data_p.loc[abs(data_p["rxn_fluxRatio"]) < 0.9, "Gene IDs"].unique().size
+        )
+        n_aff_up = (
+            data_p.loc[abs(data_p["rxn_fluxRatio"]) > 1.1, "Gene IDs"].unique().size
+        )
         if input_reg == "up":
             d_s = (n_aff_down - n_aff_up) / total_aff
         else:
             d_s = (n_aff_up - n_aff_down) / total_aff
-        
+
         d_score.at[p_gene, "score"] = d_s
-    
+
     d_score.index.name = "Gene"
     d_score.to_csv(os.path.join(configs.data_dir, filename))
     return d_score
@@ -239,7 +243,7 @@ def score_gene_pairs_diff(gene_pairs, file_full_path):
         n_aff_up = data_p.loc[data_p["rxn_fluxRatio"] > 1e-8, "Gene IDs"].unique().size
         d_s = (n_aff_down - n_aff_up) / total_aff
         d_score.at[p_gene, "score"] = d_s
-    
+
     d_score.index.name = "Gene"
     d_score.to_csv(file_full_path)
     return d_score
@@ -268,26 +272,30 @@ def repurposing_hub_preproc(drug_file):
             continue
         for target in row["target"].split("|"):
             drug_db_new = pd.concat(
-                [drug_db_new,
-                 pd.DataFrame([
-                     {
-                         "Name": row["pert_iname"],
-                         "MOA": row["moa"],
-                         "Target": target.strip(),
-                         "Phase": row["clinical_phase"]
-                     }])
-                 ],
-                ignore_index=True
+                [
+                    drug_db_new,
+                    pd.DataFrame(
+                        [
+                            {
+                                "Name": row["pert_iname"],
+                                "MOA": row["moa"],
+                                "Target": target.strip(),
+                                "Phase": row["clinical_phase"],
+                            }
+                        ]
+                    ),
+                ],
+                ignore_index=True,
             )
     drug_db_new.reset_index(inplace=True)
-    
+
     biodbnet = BioDBNet()
     entrez_ids = biodbnet.db2db(
         input_values=drug_db_new["Target"].tolist(),
         input_db=Input.GENE_SYMBOL,
         output_db=Output.GENE_ID,
     )
-    
+
     # entrez_ids = fetch_entrez_gene_id(drug_db_new["Target"].tolist(), input_db="Gene Symbol")
     entrez_ids.reset_index(drop=False, inplace=True)
     drug_db_new["ENTREZ_GENE_ID"] = entrez_ids["Gene ID"]
@@ -303,7 +311,7 @@ def drug_repurposing(drug_db, d_score):
         input_db=Input.GENE_ID,
         output_db=[Output.GENE_SYMBOL],
     )
-    
+
     d_score.set_index("Gene", inplace=True)
     d_score["Gene Symbol"] = d_score_gene_sym["Gene Symbol"]
     d_score.reset_index(drop=False, inplace=True)
@@ -312,14 +320,14 @@ def drug_repurposing(drug_db, d_score):
         target = row["Gene Symbol"]
         drugs = drug_db.loc[drug_db["Target"] == target, :].copy()
         drugs[["d_score"]] = row[["score"]].copy()
-        
+
         d_score_new = pd.concat([d_score_new, drugs], ignore_index=True)
-    
+
     d_score_new.drop_duplicates(inplace=True)
     d_score_trim = d_score_new[
         d_score_new["MOA"].str.lower().str.contains("inhibitor") == True
-        ]
-    
+    ]
+
     return d_score_trim
 
 
@@ -328,7 +336,7 @@ def main(argv):
         prog="knock_out_simulation.py",
         description="This script is responsible for mapping drug targets in metabolic models, performing knock out simulations, and comparing simulation results with disease genes. It also identified drug targets and repurposable drugs.",
         epilog="For additional help, please post questions/issues in the MADRID GitHub repo at "
-               "https://github.com/HelikarLab/COMO",
+        "https://github.com/HelikarLab/COMO",
     )
     parser.add_argument(
         "-m",
@@ -336,7 +344,7 @@ def main(argv):
         type=str,
         required=True,
         dest="model",
-        help="The context-specific model file, (must be .mat, .xml, or .json"
+        help="The context-specific model file, (must be .mat, .xml, or .json",
     )
     parser.add_argument(
         "-c",
@@ -344,7 +352,7 @@ def main(argv):
         type=str,
         required=True,
         dest="context",
-        help="Name of context, tissue, cell-type, etc"
+        help="Name of context, tissue, cell-type, etc",
     )
     parser.add_argument(
         "-d",
@@ -352,7 +360,7 @@ def main(argv):
         type=str,
         required=True,
         dest="disease",
-        help="Name of disease"
+        help="Name of disease",
     )
     parser.add_argument(
         "-up",
@@ -360,7 +368,7 @@ def main(argv):
         type=str,
         required=True,
         dest="disease_up",
-        help="The name of the disease up-regulated file"
+        help="The name of the disease up-regulated file",
     )
     parser.add_argument(
         "-dn",
@@ -368,7 +376,7 @@ def main(argv):
         type=str,
         required=True,
         dest="disease_down",
-        help="The name of the disease down-regulated file"
+        help="The name of the disease down-regulated file",
     )
     parser.add_argument(
         "-r",
@@ -376,7 +384,7 @@ def main(argv):
         type=str,
         required=True,
         dest="raw_drug_file",
-        help="The name of the raw drug file"
+        help="The name of the raw drug file",
     )
     parser.add_argument(
         "-f",
@@ -385,7 +393,7 @@ def main(argv):
         required=False,
         default=None,
         dest="ref_flux_file",
-        help="The name of the reference flux file"
+        help="The name of the reference flux file",
     )
     parser.add_argument(
         "-a",
@@ -394,7 +402,7 @@ def main(argv):
         required=False,
         default=False,
         dest="test_all",
-        help="Test all genes, even ones predicted to have little no effect."
+        help="Test all genes, even ones predicted to have little no effect.",
     )
     parser.add_argument(
         "-p",
@@ -403,7 +411,7 @@ def main(argv):
         required=False,
         default=False,
         dest="pars_flag",
-        help="Use parsimonious FBA for optimal reference solution (only if not providing flux file)"
+        help="Use parsimonious FBA for optimal reference solution (only if not providing flux file)",
     )
     parser.add_argument(
         "-s",
@@ -412,9 +420,9 @@ def main(argv):
         required=False,
         default="gurobi",
         dest="solver",
-        help="The solver to use for FBA. Options are: gurobi or glpk"
+        help="The solver to use for FBA. Options are: gurobi or glpk",
     )
-    
+
     args = parser.parse_args()
     tissue_spec_model_file = args.model
     context = args.context
@@ -426,14 +434,14 @@ def main(argv):
     test_all = args.test_all
     pars_flag = args.pars_flag
     solver = args.solver
-    
+
     output_dir = os.path.join(configs.data_dir, "results", context, disease)
     inhibitors_file = os.path.join(output_dir, f"{context}_{disease}_inhibitors.tsv")
-    
+
     print(f"Output directory: '{output_dir}'")
     print(f"Tissue Specific Model file is at: {tissue_spec_model_file}")
     print(f"Tissue specific inhibitors is at: {inhibitors_file}")
-    
+
     if tissue_spec_model_file[-4:] == ".mat":
         cobra_model = cobra.io.load_matlab_model(tissue_spec_model_file)
     elif tissue_spec_model_file[-4:] == ".xml":
@@ -442,34 +450,47 @@ def main(argv):
         cobra_model = cobra.io.load_json_model(tissue_spec_model_file)
     else:
         raise NameError("reference model format must be .xml, .mat, or .json")
-    
+
     cobra_model.solver = solver
-    
+
     # preprocess repurposing hub data
     raw_drug_filepath = os.path.join(configs.data_dir, raw_drug_filename)
-    reformatted_drug_file = os.path.join(configs.data_dir, "Repurposing_Hub_Preproc.tsv")
+    reformatted_drug_file = os.path.join(
+        configs.data_dir, "Repurposing_Hub_Preproc.tsv"
+    )
     if not os.path.isfile(reformatted_drug_file):
         print("Preprocessing raw Repurposing Hub DB file...")
         drug_db = repurposing_hub_preproc(raw_drug_filepath)
         drug_db.to_csv(reformatted_drug_file, index=False, sep="\t")
-        print(f"Preprocessed Repurposing Hub tsv file written to:\n{reformatted_drug_file}")
+        print(
+            f"Preprocessed Repurposing Hub tsv file written to:\n{reformatted_drug_file}"
+        )
     else:
-        print(f"Found preprocessed Repurposing Hub tsv file at:\n{reformatted_drug_file}")
+        print(
+            f"Found preprocessed Repurposing Hub tsv file at:\n{reformatted_drug_file}"
+        )
         drug_db = pd.read_csv(reformatted_drug_file, sep="\t")
-    
+
     # Knock Out Simulation
-    model, gene_ind2genes, has_effects_gene, fluxsolution, flux_solution_ratios, flux_solution_diffs = knock_out_simulation(
+    (
+        model,
+        gene_ind2genes,
+        has_effects_gene,
+        fluxsolution,
+        flux_solution_ratios,
+        flux_solution_diffs,
+    ) = knock_out_simulation(
         model=cobra_model,
         inhibitors_filepath=inhibitors_file,
         drug_db=drug_db,
         reference_flux_filepath=ref_flux_file,
         test_all=test_all,
-        pars_flag=pars_flag
+        pars_flag=pars_flag,
     )
-    
+
     flux_solution_diffs.to_csv(os.path.join(output_dir, "flux_diffs_KO.csv"))
     flux_solution_ratios.to_csv(os.path.join(output_dir, "flux_ratios_KO.csv"))
-    
+
     gene_pairs_down = create_gene_pairs(
         configs.data_dir,
         model,
@@ -480,9 +501,12 @@ def main(argv):
         has_effects_gene,
         disease_genes=disease_down_file,
     )
-    
-    gene_pairs_down.to_csv(os.path.join(output_dir, f"{context}_Gene_Pairs_Inhi_Fratio_DOWN.txt"), index=False)
-    
+
+    gene_pairs_down.to_csv(
+        os.path.join(output_dir, f"{context}_Gene_Pairs_Inhi_Fratio_DOWN.txt"),
+        index=False,
+    )
+
     gene_pairs_up = create_gene_pairs(
         configs.data_dir,
         model,
@@ -493,20 +517,34 @@ def main(argv):
         has_effects_gene,
         disease_genes=disease_up_file,
     )
-    gene_pairs_up.to_csv(os.path.join(output_dir, f"{context}_Gene_Pairs_Inhi_Fratio_UP.txt"), index=False)
-    d_score_down = score_gene_pairs(gene_pairs_down, os.path.join(output_dir, f"{context}_d_score_DOWN.csv"),
-                                    input_reg="down")
-    d_score_up = score_gene_pairs(gene_pairs_up, os.path.join(output_dir, f"{context}_d_score_UP.csv"), input_reg="up")
-    pertubation_effect_score = (d_score_up + d_score_down).sort_values(by="score", ascending=False)
+    gene_pairs_up.to_csv(
+        os.path.join(output_dir, f"{context}_Gene_Pairs_Inhi_Fratio_UP.txt"),
+        index=False,
+    )
+    d_score_down = score_gene_pairs(
+        gene_pairs_down,
+        os.path.join(output_dir, f"{context}_d_score_DOWN.csv"),
+        input_reg="down",
+    )
+    d_score_up = score_gene_pairs(
+        gene_pairs_up,
+        os.path.join(output_dir, f"{context}_d_score_UP.csv"),
+        input_reg="up",
+    )
+    pertubation_effect_score = (d_score_up + d_score_down).sort_values(
+        by="score", ascending=False
+    )
     pertubation_effect_score.to_csv(os.path.join(output_dir, f"{context}_d_score.csv"))
     pertubation_effect_score.reset_index(drop=False, inplace=True)
-    
+
     # last step: output drugs based on d score
     drug_score = drug_repurposing(drug_db, pertubation_effect_score)
     drug_score_file = os.path.join(output_dir, f"{context}_drug_score.csv")
     drug_score.to_csv(drug_score_file, index=False)
-    print("Gene D score mapped to repurposing drugs saved to\n{}".format(drug_score_file))
-    
+    print(
+        "Gene D score mapped to repurposing drugs saved to\n{}".format(drug_score_file)
+    )
+
     print(f"\nFinished {disease}!")
 
 
