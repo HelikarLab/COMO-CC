@@ -74,18 +74,17 @@ def knock_out_simulation(
     dt_genes: pd.DataFrame
     if inhibitors_filepath.exists():
         print(f"Inhibitors file found at:\n{inhibitors_filepath}")
-        DT_genes = pd.read_csv(os.path.join(configs.data_dir, inhibitors_filepath), header=None, sep="\t")
-        DT_genes.rename(columns={0: "Gene ID"}, inplace=True)
-        DT_genes["Gene ID"] = DT_genes["Gene ID"].astype(str)
+        dt_genes = pd.read_csv(inhibitors_filepath, header=None, sep="\t")
+        dt_genes.rename(columns={0: "Gene ID"}, inplace=True)
+        dt_genes["Gene ID"] = dt_genes["Gene ID"].astype(str)
     else:
-        # if inhibitors file does not exist, create a new one
-        # only keep inhibitor
-        drug_db = drug_db[drug_db["MOA"].str.lower().str.contains("inhibitor") == True]
-        DT_genes = pd.DataFrame(columns=["Gene ID"])
-        DT_genes["Gene ID"] = drug_db["ENTREZ_GENE_ID"].astype(str)
-        DT_genes.replace("-", np.nan, inplace=True)
-        DT_genes.dropna(axis=0, inplace=True)
-        DT_genes.to_csv(inhibitors_filepath, header=False, sep="\t")
+        # only keep inhibitors
+        drug_db = drug_db[drug_db["MOA"].str.lower().str.contains("inhibitor")]
+        dt_genes = pd.DataFrame(columns=["Gene ID"])
+        dt_genes["Gene ID"] = drug_db["ENTREZ_GENE_ID"].astype(str)
+        dt_genes.replace("-", np.nan, inplace=True)
+        dt_genes.dropna(axis=0, inplace=True)
+        dt_genes.to_csv(inhibitors_filepath, header=False, sep="\t")
         print(f"Inhibitors file written to:\n{inhibitors_filepath}")
     
     gene_ind2genes = [x.id for x in model.genes]
@@ -98,8 +97,8 @@ def knock_out_simulation(
     model_opt[abs(model_opt) < 1e-8] = 0.0
     
     genes_with_metabolic_effects = []
-    for id_ in DT_model:
-        gene = model.genes.get_by_id(id_)
+    for id_ in dt_model:
+        gene: cobra.Gene = model.genes.get_by_id(id_)
         for rxn in gene.reactions:
             gene_reaction_rule = rxn.gene_reaction_rule
             gene_ids = re.findall(r"\d+", gene_reaction_rule)
