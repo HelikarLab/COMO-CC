@@ -19,8 +19,6 @@ configs = Configs()
 
 
 def _perform_knockout(
-    spacer: str,
-    total_knockouts: int,
     model: cobra.Model,
     gene_id: str,
     reference_solution,
@@ -31,25 +29,14 @@ def _perform_knockout(
     model_copy = model.copy()
     gene: cobra.Gene = model_copy.genes.get_by_id(gene_id)
     gene.knock_out()
-    
+
     optimized_model: pd.DataFrame = cobra.flux_analysis.moma(
-        model_copy,
-        solution=reference_solution,
-        linear=False
+        model_copy, solution=reference_solution, linear=False
     ).to_frame()
-    
-    count_progress.acquire()
-    count_progress.value += 1
-    print(
-        f"({count_progress.value:{spacer}d} of {total_knockouts}) Finished knock-out simulation for gene ID: {int(gene_id):6d}")
-    count_progress.release()
-    
+
+    print(f"Finished knock-out simulation for gene ID: {int(gene_id):6d}")
+
     return gene_id, optimized_model["fluxes"]
-
-
-def initialize_pool(synchronizer):
-    global count_progress
-    count_progress = synchronizer
 
 
 def knock_out_simulation(
