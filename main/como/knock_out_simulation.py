@@ -50,25 +50,29 @@ def knock_out_simulation(
 ):
     reference_solution: cobra.Solution
     if reference_flux_filepath is not None:
-        try:
-            reference_flux_df: pd.DataFrame = pd.read_csv(reference_flux_filepath)
-            reference_flux_df.set_index("rxn", inplace=True)
-            reference_flux = reference_flux_df["flux"].squeeze()
-        except FileNotFoundError:
-            raise FileNotFoundError(f"Reference flux file not found at {reference_flux_filepath}")
-        except KeyError:
-            raise KeyError(
-                "Reference flux file must be a CSV file with the columns 'rxn' and 'flux' and row number equal to "
-                "the given context-specific model!")
-        
-        reference_solution = cobra.core.solution.Solution(model.objective, "OPTIMAL", reference_flux)
+        reference_flux_filepath: Path = Path(reference_flux_filepath)
+        if not reference_flux_filepath.exists():
+            raise FileNotFoundError(
+                f"Reference flux file not found at {reference_flux_filepath.as_posix()}"
+            )
+        reference_flux_df: pd.DataFrame = pd.read_csv(reference_flux_filepath)
+        if (
+            "rxn" not in reference_flux_df.columns
+            or "flux" not in reference_flux_df.columns
+        ):
+            raise KeyError("Reference flux file must be a CSV file with the columns 'rxn' and 'flux' with the same number of rows as the number of reactions in the given context-specific model!")  # fmt: skip
+        reference_flux_df.set_index("rxn", inplace=True)
+        reference_flux = reference_flux_df["flux"].squeeze()
+        reference_solution = cobra.core.solution.Solution(model.objective, "OPTIMAL", reference_flux)  # fmt: skip
     else:
-        if pars_flag:
-            reference_solution = cobra.flux_analysis.pfba(model)
-        else:
-            reference_solution = model.optimize()
-    
-    if os.path.isfile(inhibitors_filepath):
+        reference_solution = (
+            cobra.flux_analysis.pfba(model) if pars_flag else model.optimize()
+        )
+
+    inhibitors_filepath: Path = Path(configs.data_dir, inhibitors_filepath)
+
+    dt_genes: pd.DataFrame
+    if inhibitors_filepath.exists():
         print(f"Inhibitors file found at:\n{inhibitors_filepath}")
         DT_genes = pd.read_csv(os.path.join(configs.data_dir, inhibitors_filepath), header=None, sep="\t")
         DT_genes.rename(columns={0: "Gene ID"}, inplace=True)
