@@ -45,7 +45,7 @@ def knock_out_simulation(
     drug_db: pd.DataFrame,
     reference_flux_filepath: Union[str, Path, None],
     test_all: bool,
-    pars_flag: bool
+    pars_flag: bool,
 ):
     reference_solution: cobra.Solution
     if reference_flux_filepath is not None:
