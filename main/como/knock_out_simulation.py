@@ -390,14 +390,13 @@ def main(argv):
     else:
         raise NameError("Reference model  must be in 'mat', 'xml', 'sbml', or 'json' format.")
 
-    cobra_model.solver = solver
-
-    # preprocess repurposing hub data
-    raw_drug_filepath = os.path.join(configs.data_dir, raw_drug_filename)
-    reformatted_drug_file = os.path.join(
-        configs.data_dir, "Repurposing_Hub_Preproc.tsv"
-    )
-    if not os.path.isfile(reformatted_drug_file):
+    raw_drug_filepath = Path(configs.data_dir, raw_drug_filename)
+    reformatted_drug_filepath = raw_drug_filepath.with_stem(f"{raw_drug_filepath.stem}_processed")
+    drug_info_df: pd.DataFrame
+    if reformatted_drug_filepath.exists():
+        print(f"Found preprocessed Repurposing Hub tsv file at: {reformatted_drug_filepath}")
+        drug_info_df = pd.read_csv(reformatted_drug_filepath, sep="\t")
+    else:
         print("Preprocessing raw Repurposing Hub DB file...")
         drug_info_df = repurposing_hub_preproc(drug_info_filepath=raw_drug_filepath, biodbnet=biodbnet)
         drug_info_df.to_csv(reformatted_drug_filepath, index=False, sep="\t")
