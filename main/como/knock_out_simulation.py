@@ -415,8 +415,8 @@ def main(argv):
         flux_solution_diffs,
     ) = knock_out_simulation(
         model=cobra_model,
-        inhibitors_filepath=inhibitors_file,
-        drug_db=drug_db,
+        inhibitors_filepath=inhibitors_filepath,
+        drug_db=drug_info_df,
         reference_flux_filepath=ref_flux_file,
         test_all=test_all,
         pars_flag=pars_flag,
@@ -433,7 +433,7 @@ def main(argv):
         flux_solution_ratios,
         flux_solution_diffs,
         has_effects_gene,
-        disease_genes=disease_down_file,
+        disease_genes_filename=disease_down_file,
     )
     gene_pairs_down.to_csv(os.path.join(output_dir, f"{context}_Gene_Pairs_Inhi_Fratio_DOWN.txt"), index=False)
 
@@ -445,7 +445,7 @@ def main(argv):
         flux_solution_ratios,
         flux_solution_diffs,
         has_effects_gene,
-        disease_genes=disease_up_file,
+        disease_genes_filename=disease_up_file,
     )
     gene_pairs_up.to_csv(os.path.join(output_dir, f"{context}_Gene_Pairs_Inhi_Fratio_UP.txt"), index=False)
 
