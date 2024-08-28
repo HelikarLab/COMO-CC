@@ -359,11 +359,11 @@ def main(argv):
     )
 
     args = parser.parse_args()
-    tissue_spec_model_file = args.model
+    tissue_spec_model_file = Path(args.model)
     context = args.context
     disease = args.disease
-    disease_up_file = args.disease_up
-    disease_down_file = args.disease_down
+    disease_up_file = Path(args.disease_up)
+    disease_down_file = Path(args.disease_down)
     raw_drug_filename = args.raw_drug_file
     ref_flux_file = args.ref_flux_file
     test_all = args.test_all
@@ -375,7 +375,9 @@ def main(argv):
     biodbnet = BioDBNet(show_progress=True, cache=False)
     thread_pool = ThreadPoolExecutor(max_workers=1)
 
-    biodbnet = BioDBNet(show_progress=False)
+    print(f"Output directory: '{output_dir.as_posix()}'")
+    print(f"Tissue Specific Model file is at: {tissue_spec_model_file.as_posix()}")
+    print(f"Tissue specific inhibitors is at: {inhibitors_filepath.as_posix()}")
 
     print(f"Output directory: '{output_dir}'")
     print(f"Tissue Specific Model file is at: {tissue_spec_model_file}")
