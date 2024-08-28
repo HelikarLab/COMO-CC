@@ -127,50 +127,36 @@ def create_gene_pairs(
     has_effects_gene: list[str],
     disease_genes_filename: Path,
 ):
-    disease_genes = pd.read_csv(str(os.path.join(datadir, disease_genes)))
-    dag_dis_genes = pd.DataFrame()  # data analysis genes
-    dag_dis_genes["Gene ID"] = disease_genes.iloc[:, 0].astype(str)
-    # DAG_dis_genes
-    dag_dis_met_genes = set(dag_dis_genes["Gene ID"].tolist()).intersection(
-        gene_ind2genes
-    )
-    # DAG_dis_met_genes
+    disease_genes_df: pd.DataFrame = pd.read_csv(str(os.path.join(datadir, disease_genes_filename)))
+    if len(disease_genes_df.columns) != 1:
+        raise ValueError(f"Expected 1 column in {disease_genes_filename}, got {len(disease_genes_df.columns)}")
 
-    dag_dis_met_rxn_ind = []
-    gene_i = []
-    for id_ in dag_dis_met_genes:
-        gene = model.genes.get_by_id(id_)
-        for rxn in gene.reactions:
-            dag_dis_met_rxn_ind.append(rxn.id)
-            gene_i.append(id_)
+    disease_genes_df.columns = ["Gene ID"]
+    disease_genes_df["Gene ID"] = disease_genes_df["Gene ID"].astype(str)
+    metabolic_disease_genes = set(disease_genes_df["Gene ID"]).intersection(gene_ind2genes)
 
-    # DAG_dis_met_rxn_ind
-    gene_df = pd.DataFrame(gene_i, columns=["Gene IDs"], index=dag_dis_met_rxn_ind)
-    # gene_df
+    gene_df = pd.DataFrame(columns=["Gene ID", "Reaction ID"])
+    for id_ in metabolic_disease_genes:
+        model_gene: cobra.Gene = model.genes.get_by_id(id_)
+        gene_reactions: list[str] = [rxn.id for rxn in model_gene.reactions]
+        gene_df = pd.concat([gene_df, pd.DataFrame({"Gene ID": id_, "Reaction ID": gene_reactions})], ignore_index=True)
+    gene_df.set_index("Reaction ID", drop=True, inplace=True)
 
-    dag_rxn_flux_ratio: pd.DataFrame = flux_solution_ratios.loc[dag_dis_met_rxn_ind]
-    dag_rxn_flux_diffs: pd.DataFrame = flux_solution_diffs.loc[dag_dis_met_rxn_ind]
-    dag_rxn_flux_value: pd.DataFrame = flux_solution.loc[dag_dis_met_rxn_ind]
-    # dag_rxn_flux_ratio
-
-    gene_mat_out = []
-    # gene_i = DAG_dis_met_genes
-    # Rind_i = DAG_dis_met_rxn_ind
+    dag_rxn_flux_ratio: pd.DataFrame = flux_solution_ratios.loc[gene_df.index.tolist()]
+    dag_rxn_flux_diffs: pd.DataFrame = flux_solution_diffs.loc[gene_df.index.tolist()]
+    dag_rxn_flux_value: pd.DataFrame = flux_solution.loc[gene_df.index.tolist()]
+    gene_mat_out: list[pd.DataFrame] = []
 
     for id_ in has_effects_gene:
         pegene = pd.DataFrame()
-        pegene["Gene IDs"] = gene_df["Gene IDs"].copy()
-        pegene["rxn_fluxRatio"] = dag_rxn_flux_ratio[id_].copy()
-        rxn_flux_diffs = dag_rxn_flux_diffs[id_].copy()
-        rxn_flux_value = dag_rxn_flux_value[id_].copy()
+        pegene["Gene ID"] = gene_df["Gene ID"]
+        pegene["rxn_flux_ratio"] = dag_rxn_flux_ratio[id_]
         pegene["Gene"] = id_
-        pegene = pegene.loc[
-            (~pegene["rxn_fluxRatio"].isna())
-            & (abs(rxn_flux_diffs) + abs(rxn_flux_value) > 1e-8)
-        ]
-        # pegene.dropna(axis=0,subset=['rxn_fluxRatio'],inplace=True)
+
+        rxn_flux_diffs = dag_rxn_flux_diffs[id_]
+        rxn_flux_value = dag_rxn_flux_value[id_]
+        pegene = pegene.loc[(~pegene["rxn_flux_ratio"].isna()) & (abs(rxn_flux_diffs) + abs(rxn_flux_value) > 1e-8)]
         pegene.index.name = "reaction"
-        pegene.reset_index(drop=False, inplace=True)
         gene_mat_out.append(pegene)
 
     gene_pairs = pd.concat(gene_mat_out, ignore_index=True)
