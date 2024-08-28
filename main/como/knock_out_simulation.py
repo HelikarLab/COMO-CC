@@ -199,15 +199,13 @@ def score_gene_pairs_diff(gene_pairs, file_full_path):
     return d_score
 
 
-def load_Inhi_Fratio(filepath):
-    temp2 = pd.read_csv(filepath)
-    temp2.rename(
-        columns={
-            "gene_mat_out1": "Gene",
-            "gene_mat_out2": "Gene IDs",
-            "gene_mat_out3": "rxn_fluxRatio",
-        },
-        inplace=True,
+def repurposing_hub_preproc(drug_info_filepath: Path, biodbnet: BioDBNet):
+    drug_info_df: pd.DataFrame = pd.read_csv(drug_info_filepath, sep="\t")
+    drug_info_df["target"] = drug_info_df["target"].str.split("|").explode().reset_index(drop=True)
+    drug_info_df = (
+        drug_info_df.drop(columns=["disease_area", "indication"])
+        .rename(columns={"pert_iname": "name", "clinical_phase": "phase"})
+        .dropna(subset=["target", "moa"])
     )
     temp2.Gene = temp2.Gene.astype(str)
     temp2["Gene IDs"] = temp2["Gene IDs"].astype(str)
