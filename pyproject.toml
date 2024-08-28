@@ -9,7 +9,7 @@ dynamic = ["version"]
 requires-python = ">=3.8"
 dependencies = [
     "cobra",
-    "fast_bioservices @ git+https://github.com/JoshLoecker/fast_bioservices",
+    "fast-bioservices>=0.3.4",
     "cobamp @ git+https://github.com/JoshLoecker/cobamp.git",
     "geoparse",
     "numpy",
