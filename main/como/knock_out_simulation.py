@@ -379,18 +379,16 @@ def main(argv):
     print(f"Tissue Specific Model file is at: {tissue_spec_model_file.as_posix()}")
     print(f"Tissue specific inhibitors is at: {inhibitors_filepath.as_posix()}")
 
-    print(f"Output directory: '{output_dir}'")
-    print(f"Tissue Specific Model file is at: {tissue_spec_model_file}")
-    print(f"Tissue specific inhibitors is at: {inhibitors_file}")
-
-    if tissue_spec_model_file[-4:] == ".mat":
-        cobra_model = cobra.io.load_matlab_model(tissue_spec_model_file)
-    elif tissue_spec_model_file[-4:] == ".xml":
-        cobra_model = cobra.io.read_sbml_model(tissue_spec_model_file)
-    elif tissue_spec_model_file[-5:] == ".json":
-        cobra_model = cobra.io.load_json_model(tissue_spec_model_file)
+    if not tissue_spec_model_file.exists():
+        raise FileNotFoundError(f"Model file not found at {tissue_spec_model_file.as_posix()}")
+    elif tissue_spec_model_file.suffix == ".mat":
+        future = thread_pool.submit(cobra.io.load_matlab_model, infile_path=tissue_spec_model_file.as_posix())  # type: ignore
+    elif tissue_spec_model_file.suffix in (".xml", ".sbml"):
+        future = thread_pool.submit(cobra.io.read_sbml_model, filename=tissue_spec_model_file.as_posix())  # type: ignore
+    elif tissue_spec_model_file.suffix == ".json":
+        future = thread_pool.submit(cobra.io.load_json_model, filename=tissue_spec_model_file.as_posix())  # type: ignore
     else:
-        raise NameError("reference model format must be .xml, .mat, or .json")
+        raise NameError("Reference model  must be in 'mat', 'xml', 'sbml', or 'json' format.")
 
     cobra_model.solver = solver
 
@@ -405,7 +403,10 @@ def main(argv):
         drug_info_df.to_csv(reformatted_drug_filepath, index=False, sep="\t")
         print(f"Preprocessed Repurposing Hub tsv file written to: {reformatted_drug_filepath.as_posix()}")
 
-    # Knock Out Simulation
+    cobra_model: cobra.Model = future.result()
+    cobra_model.solver = solver
+    thread_pool.shutdown()
+
     (
         model,
         gene_ind2genes,
