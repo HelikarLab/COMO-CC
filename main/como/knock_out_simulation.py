@@ -53,32 +53,31 @@ def knock_out_simulation(
     else:
         reference_solution = cobra.flux_analysis.pfba(model) if pars_flag else model.optimize()
 
-    inhibitors_filepath: Path = Path(configs.data_dir, inhibitors_filepath)
-
-    dt_genes: pd.DataFrame
+    drug_target_genes: pd.DataFrame
     if inhibitors_filepath.exists():
         print(f"Inhibitors file found at: {inhibitors_filepath}")
         dt_genes = pd.read_csv(inhibitors_filepath, header=None, sep="\t")
         dt_genes.rename(columns={0: "Gene ID"}, inplace=True)
         dt_genes["Gene ID"] = dt_genes["Gene ID"].astype(str)
+        drug_target_genes = pd.read_csv(inhibitors_filepath, sep="\t")
+        # dt_genes.rename(columns={0: "Gene ID"}, inplace=True)
+        drug_target_genes["Gene ID"] = drug_target_genes["Gene ID"].astype(str)
     else:
         # only keep inhibitors
-        drug_db = drug_db[drug_db["MOA"].str.lower().str.contains("inhibitor")]
-        dt_genes = pd.DataFrame(columns=["Gene ID"])
-        dt_genes["Gene ID"] = drug_db["ENTREZ_GENE_ID"].astype(str)
-        dt_genes.replace("-", np.nan, inplace=True)
-        dt_genes.dropna(axis=0, inplace=True)
-        dt_genes.to_csv(inhibitors_filepath, header=False, sep="\t")
+        drug_db = drug_db[drug_db["moa"].str.lower().str.contains("inhibitor")]
+        drug_target_genes = pd.DataFrame(columns=["Gene ID"])
+        drug_target_genes["Gene ID"] = drug_db["Gene ID"].astype(str)
+        drug_target_genes.replace("-", np.nan, inplace=True)
+        drug_target_genes.dropna(axis=0, inplace=True)
+        drug_target_genes.to_csv(inhibitors_filepath, header=True, sep="\t", index=False)
         print(f"Inhibitors file written to: {inhibitors_filepath}")
 
     gene_ind2genes = set(x.id for x in model.genes)
-    dt_model = list(set(dt_genes["Gene ID"].tolist()).intersection(gene_ind2genes))
-    print(
-        f"{len(gene_ind2genes)} genes in model, {len(dt_model)}  can be targeted by inhibitors"
-    )
+    dt_model = list(set(drug_target_genes["Gene ID"].tolist()).intersection(gene_ind2genes))
+    print(f"{len(gene_ind2genes)} genes in model, {len(dt_model)} can be targeted by inhibitors")
 
-    model_opt = cobra.flux_analysis.moma(model, solution=reference_solution).to_frame()
-    model_opt[abs(model_opt) < 1e-6] = 0.0
+    wild_type_model = cobra.flux_analysis.moma(model, solution=reference_solution).to_frame()
+    wild_type_model[abs(wild_type_model) < 1e-6] = 0.0
 
     genes_with_metabolic_effects = []
     for id_ in dt_model:
@@ -94,22 +93,22 @@ def knock_out_simulation(
                 break
     print(f"Found {len(genes_with_metabolic_effects)} genes with potentially-significant metabolic impacts")  # fmt: skip
 
-    futures: list[Future[tuple[str, pd.DataFrame]]] = []
-    flux_solution: pd.DataFrame = pd.DataFrame()
+    futures: list[Future[tuple[str, pd.Series]]] = []
     with ProcessPoolExecutor(max_workers=os.cpu_count()) as executor:
-        for id_ in genes_with_metabolic_effects[:10]:
-            future = executor.submit(_perform_knockout, model, id_, reference_solution)
+        for i, id_ in enumerate(genes_with_metabolic_effects, start=1):
+            future: Future = executor.submit(_perform_knockout, model, id_, reference_solution)
             futures.append(future)
 
-    gene_id: str
-    knock_out_flux: pd.Series
-    for result in as_completed(futures):
-        gene_id, knock_out_flux = result.result()
-        flux_solution[gene_id] = knock_out_flux
+        gene_id: str
+        knock_out_flux: pd.Series
+        flux_solution: pd.DataFrame = pd.DataFrame()
+        for result in as_completed(futures):
+            gene_id, knock_out_flux = result.result()
+            flux_solution[gene_id] = knock_out_flux
 
     flux_solution[abs(flux_solution) < 1e-6] = 0.0
-    flux_solution_ratios = flux_solution.div(model_opt["fluxes"], axis=0)
-    flux_solution_diffs = flux_solution.sub(model_opt["fluxes"], axis=0)
+    flux_solution_ratios = flux_solution.div(wild_type_model["fluxes"], axis=0)
+    flux_solution_diffs = flux_solution.sub(wild_type_model["fluxes"], axis=0)
 
     return (
         model,
