@@ -207,38 +207,29 @@ def repurposing_hub_preproc(drug_info_filepath: Path, biodbnet: BioDBNet):
         .rename(columns={"pert_iname": "name", "clinical_phase": "phase"})
         .dropna(subset=["target", "moa"])
     )
-    temp2.Gene = temp2.Gene.astype(str)
-    temp2["Gene IDs"] = temp2["Gene IDs"].astype(str)
-    return temp2
-
-
-def repurposing_hub_preproc(drug_file, biodbnet: BioDBNet):
-    drug_db = pd.read_csv(drug_file, sep="\t")
-    drug_db_new = pd.DataFrame()
-    for index, row in drug_db.iterrows():
-        if pd.isnull(row["target"]):
-            continue
-        for target in row["target"].split("|"):
-            drug_db_new = pd.concat(
-                [
-                    drug_db_new,
-                    pd.DataFrame(
-                        [
-                            {
-                                "Name": row["pert_iname"],
-                                "MOA": row["moa"],
-                                "Target": target.strip(),
-                                "Phase": row["clinical_phase"],
-                            }
-                        ]
-                    ),
-                ],
-                ignore_index=True,
-            )
-    drug_db_new.reset_index(inplace=True)
-
+    # for index, row in drug_db.iterrows():
+    #     if pd.isnull(row["target"]):
+    #         continue
+    #     for target in row["target"].split("|"):
+    #         drug_db_new = pd.concat(
+    #             [
+    #                 drug_db_new,
+    #                 pd.DataFrame(
+    #                     [
+    #                         {
+    #                             "Name": row["pert_iname"],
+    #                             "MOA": row["moa"],
+    #                             "Target": target.strip(),
+    #                             "Phase": row["clinical_phase"],
+    #                         }
+    #                     ]
+    #                 ),
+    #             ],
+    #             ignore_index=True,
+    #         )
+    # drug_db_new.reset_index(inplace=True)
     entrez_ids = biodbnet.db2db(
-        input_values=drug_db_new["Target"].tolist(),
+        input_values=drug_info_df["target"].tolist(),
         input_db=Input.GENE_SYMBOL,
         output_db=Output.GENE_ID,
     )
@@ -253,29 +244,26 @@ def repurposing_hub_preproc(drug_file, biodbnet: BioDBNet):
 def drug_repurposing(drug_db: pd.DataFrame, perturbation_score: pd.DataFrame, biodbnet: BioDBNet):
     perturbation_score["Gene ID"] = perturbation_score["Gene ID"].astype(str)
 
-def drug_repurposing(drug_db, d_score, biodbnet: BioDBNet):
-    d_score["Gene"] = d_score["Gene"].astype(str)
-    d_score_gene_sym = biodbnet.db2db(
-        input_values=d_score["Gene"].tolist(),
+    conversion = biodbnet.db2db(
+        input_values=perturbation_score["Gene ID"].tolist(),
         input_db=Input.GENE_ID,
         output_db=[Output.GENE_SYMBOL],
     )
 
-    d_score.set_index("Gene", inplace=True)
-    d_score["Gene Symbol"] = d_score_gene_sym["Gene Symbol"]
-    d_score.reset_index(drop=False, inplace=True)
-    d_score_new = pd.DataFrame()
-    for index, row in d_score.iterrows():
+    perturbation_score = pd.merge(perturbation_score, conversion, on="Gene ID", how="left")
+    # d_score.set_index("Gene", inplace=True)
+    # d_score["Gene Symbol"] = d_score_gene_sym["Gene Symbol"]
+    # d_score.reset_index(drop=False, inplace=True)
+    drug_scores = pd.DataFrame()
+    for index, row in perturbation_score.iterrows():
         target = row["Gene Symbol"]
-        drugs = drug_db.loc[drug_db["Target"] == target, :].copy()
-        drugs[["d_score"]] = row[["score"]].copy()
+        drugs = drug_db.loc[drug_db["target"] == target, :].copy()  # Use `.copy()` to prevent `SettingWithCopyWarning`
+        drugs["score"] = row["score"]
+        drug_scores = pd.concat([drug_scores, drugs], ignore_index=True)
 
-        d_score_new = pd.concat([d_score_new, drugs], ignore_index=True)
-
-    d_score_new.drop_duplicates(inplace=True)
-    d_score_trim = d_score_new[d_score_new["MOA"].str.lower().str.contains("inhibitor")]
-
-    return d_score_trim
+    drug_scores.drop_duplicates(inplace=True)
+    drug_scores = drug_scores[drug_scores["moa"].str.lower().str.contains("inhibitor")]
+    return drug_scores
 
 
 def main(argv):
