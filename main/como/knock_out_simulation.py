@@ -20,21 +20,15 @@ def _perform_knockout(
     model: cobra.Model,
     gene_id: str,
     reference_solution,
-) -> tuple[str, pd.DataFrame]:
+) -> tuple[str, pd.Series]:
     """
     This function will perform a single gene knockout. It will be used in multiprocessing
     """
-    model_copy = model.copy()
-    gene: cobra.Gene = model_copy.genes.get_by_id(gene_id)
-    gene.knock_out()
-
-    optimized_model: pd.DataFrame = cobra.flux_analysis.moma(
-        model_copy, solution=reference_solution, linear=False
-    ).to_frame()
-
-    print(f"Finished knock-out simulation for gene ID: {int(gene_id):6d}")
-
-    return gene_id, optimized_model["fluxes"]
+    with model:
+        gene: cobra.Gene = model.genes.get_by_id(gene_id)
+        gene.knock_out()
+        optimized_model: cobra.Solution = cobra.flux_analysis.moma(model, solution=reference_solution, linear=False)
+    return gene_id, optimized_model.fluxes
 
 
 def knock_out_simulation(
@@ -408,8 +402,9 @@ def main(argv):
     pars_flag = args.pars_flag
     solver = args.solver
 
-    output_dir = os.path.join(configs.data_dir, "results", context, disease)
-    inhibitors_file = os.path.join(output_dir, f"{context}_{disease}_inhibitors.tsv")
+    output_dir = Path(configs.data_dir, "results", context, disease)
+    inhibitors_filepath = Path(output_dir, f"{context}_{disease}_inhibitors.tsv")
+    biodbnet = BioDBNet(show_progress=True, cache=False)
     thread_pool = ThreadPoolExecutor(max_workers=1)
 
     biodbnet = BioDBNet(show_progress=False)
