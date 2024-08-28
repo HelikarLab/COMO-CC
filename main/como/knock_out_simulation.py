@@ -1,4 +1,3 @@
-#!/usr/bin/python3
 import argparse
 from concurrent.futures import Future, as_completed, ProcessPoolExecutor
 import os
@@ -50,22 +49,15 @@ def knock_out_simulation(
     if reference_flux_filepath is not None:
         reference_flux_filepath: Path = Path(reference_flux_filepath)
         if not reference_flux_filepath.exists():
-            raise FileNotFoundError(
-                f"Reference flux file not found at {reference_flux_filepath.as_posix()}"
-            )
+            raise FileNotFoundError(f"Reference flux file not found at {reference_flux_filepath.as_posix()}")
         reference_flux_df: pd.DataFrame = pd.read_csv(reference_flux_filepath)
-        if (
-            "rxn" not in reference_flux_df.columns
-            or "flux" not in reference_flux_df.columns
-        ):
+        if "rxn" not in reference_flux_df.columns or "flux" not in reference_flux_df.columns:
             raise KeyError("Reference flux file must be a CSV file with the columns 'rxn' and 'flux' with the same number of rows as the number of reactions in the given context-specific model!")  # fmt: skip
         reference_flux_df.set_index("rxn", inplace=True)
         reference_flux = reference_flux_df["flux"].squeeze()
         reference_solution = cobra.core.solution.Solution(model.objective, "OPTIMAL", reference_flux)  # fmt: skip
     else:
-        reference_solution = (
-            cobra.flux_analysis.pfba(model) if pars_flag else model.optimize()
-        )
+        reference_solution = cobra.flux_analysis.pfba(model) if pars_flag else model.optimize()
 
     inhibitors_filepath: Path = Path(configs.data_dir, inhibitors_filepath)
 
@@ -101,11 +93,7 @@ def knock_out_simulation(
             gene_reaction_rule = rxn.gene_reaction_rule
             gene_ids = re.findall(r"\d+", gene_reaction_rule)
             for gene_id in gene_ids:
-                boolval = (
-                    "False"
-                    if gene_id == id_
-                    else str(model.genes.get_by_id(gene_id).functional)
-                )
+                boolval = "False" if gene_id == id_ else str(model.genes.get_by_id(gene_id).functional)
                 gene_reaction_rule = gene_reaction_rule.replace(gene_id, boolval, 1)
             if not eval(gene_reaction_rule) or test_all:
                 genes_with_metabolic_effects.append(id_)
@@ -204,13 +192,9 @@ def score_gene_pairs(gene_pairs, filename, input_reg):
     d_score = pd.DataFrame([], columns=["score"])
     for p_gene in p_model_genes:
         data_p = gene_pairs.loc[gene_pairs["Gene"] == p_gene].copy()
-        total_aff = data_p["Gene IDs"].unique().size
-        n_aff_down = (
-            data_p.loc[abs(data_p["rxn_fluxRatio"]) < 0.9, "Gene IDs"].unique().size
-        )
-        n_aff_up = (
-            data_p.loc[abs(data_p["rxn_fluxRatio"]) > 1.1, "Gene IDs"].unique().size
-        )
+        total_aff = data_p["Gene ID"].unique().size
+        n_aff_down = data_p.loc[abs(data_p["rxn_flux_ratio"]) < 0.9, "Gene ID"].unique().size
+        n_aff_up = data_p.loc[abs(data_p["rxn_flux_ratio"]) > 1.1, "Gene ID"].unique().size
         if input_reg == "up":
             d_s = (n_aff_down - n_aff_up) / total_aff
         else:
@@ -228,11 +212,9 @@ def score_gene_pairs_diff(gene_pairs, file_full_path):
     d_score = pd.DataFrame([], columns=["score"])
     for p_gene in p_model_genes:
         data_p = gene_pairs.loc[gene_pairs["Gene"] == p_gene].copy()
-        total_aff = data_p["Gene IDs"].unique().size
-        n_aff_down = (
-            data_p.loc[data_p["rxn_fluxRatio"] < -1e-8, "Gene IDs"].unique().size
-        )
-        n_aff_up = data_p.loc[data_p["rxn_fluxRatio"] > 1e-8, "Gene IDs"].unique().size
+        total_aff = data_p["Gene ID"].unique().size
+        n_aff_down = data_p.loc[data_p["rxn_flux_ratio"] < -1e-8, "Gene ID"].unique().size
+        n_aff_up = data_p.loc[data_p["rxn_flux_ratio"] > 1e-8, "Gene ID"].unique().size
         d_s = (n_aff_down - n_aff_up) / total_aff
         d_score.at[p_gene, "score"] = d_s
 
@@ -286,13 +268,16 @@ def repurposing_hub_preproc(drug_file, biodbnet: BioDBNet):
         input_db=Input.GENE_SYMBOL,
         output_db=Output.GENE_ID,
     )
+    entrez_ids.rename(columns={"Gene Symbol": "target"}, inplace=True)
+    drug_info_df = pd.merge(drug_info_df, entrez_ids, on="target")
+    # entrez_ids.reset_index(drop=False, inplace=True)
+    # drug_db_new["ENTREZ_GENE_ID"] = entrez_ids["Gene ID"]
+    # drug_db_new = drug_db_new[["Name", "MOA", "Target", "ENTREZ_GENE_ID", "Phase"]]
+    return drug_info_df
 
-    # entrez_ids = fetch_entrez_gene_id(drug_db_new["Target"].tolist(), input_db="Gene Symbol")
-    entrez_ids.reset_index(drop=False, inplace=True)
-    drug_db_new["ENTREZ_GENE_ID"] = entrez_ids["Gene ID"]
-    drug_db_new = drug_db_new[["Name", "MOA", "Target", "ENTREZ_GENE_ID", "Phase"]]
-    return drug_db_new
 
+def drug_repurposing(drug_db: pd.DataFrame, perturbation_score: pd.DataFrame, biodbnet: BioDBNet):
+    perturbation_score["Gene ID"] = perturbation_score["Gene ID"].astype(str)
 
 def drug_repurposing(drug_db, d_score, biodbnet: BioDBNet):
     d_score["Gene"] = d_score["Gene"].astype(str)
@@ -450,18 +435,9 @@ def main(argv):
     )
     if not os.path.isfile(reformatted_drug_file):
         print("Preprocessing raw Repurposing Hub DB file...")
-        drug_db = repurposing_hub_preproc(
-            drug_file=raw_drug_filepath, biodbnet=biodbnet
-        )
-        drug_db.to_csv(reformatted_drug_file, index=False, sep="\t")
-        print(
-            f"Preprocessed Repurposing Hub tsv file written to: {reformatted_drug_file}"
-        )
-    else:
-        print(
-            f"Found preprocessed Repurposing Hub tsv file at: {reformatted_drug_file}"
-        )
-        drug_db = pd.read_csv(reformatted_drug_file, sep="\t")
+        drug_info_df = repurposing_hub_preproc(drug_info_filepath=raw_drug_filepath, biodbnet=biodbnet)
+        drug_info_df.to_csv(reformatted_drug_filepath, index=False, sep="\t")
+        print(f"Preprocessed Repurposing Hub tsv file written to: {reformatted_drug_filepath.as_posix()}")
 
     # Knock Out Simulation
     (
@@ -493,11 +469,7 @@ def main(argv):
         has_effects_gene,
         disease_genes=disease_down_file,
     )
-
-    gene_pairs_down.to_csv(
-        os.path.join(output_dir, f"{context}_Gene_Pairs_Inhi_Fratio_DOWN.txt"),
-        index=False,
-    )
+    gene_pairs_down.to_csv(os.path.join(output_dir, f"{context}_Gene_Pairs_Inhi_Fratio_DOWN.txt"), index=False)
 
     gene_pairs_up = create_gene_pairs(
         configs.data_dir,
@@ -509,10 +481,8 @@ def main(argv):
         has_effects_gene,
         disease_genes=disease_up_file,
     )
-    gene_pairs_up.to_csv(
-        os.path.join(output_dir, f"{context}_Gene_Pairs_Inhi_Fratio_UP.txt"),
-        index=False,
-    )
+    gene_pairs_up.to_csv(os.path.join(output_dir, f"{context}_Gene_Pairs_Inhi_Fratio_UP.txt"), index=False)
+
     d_score_down = score_gene_pairs(
         gene_pairs_down,
         os.path.join(output_dir, f"{context}_d_score_DOWN.csv"),
@@ -523,16 +493,11 @@ def main(argv):
         os.path.join(output_dir, f"{context}_d_score_UP.csv"),
         input_reg="up",
     )
-    pertubation_effect_score = (d_score_up + d_score_down).sort_values(
-        by="score", ascending=False
-    )
-    pertubation_effect_score.to_csv(os.path.join(output_dir, f"{context}_d_score.csv"))
-    pertubation_effect_score.reset_index(drop=False, inplace=True)
+    perturbation_score: pd.DataFrame = (d_score_up + d_score_down).sort_values(by="score", ascending=False)
+    perturbation_score.to_csv(os.path.join(output_dir, f"{context}_d_score.csv"))
+    perturbation_score.reset_index(drop=False, inplace=True)
 
-    # last step: output drugs based on d score
-    drug_score = drug_repurposing(
-        drug_db=drug_db, d_score=pertubation_effect_score, biodbnet=biodbnet
-    )
+    drug_score = drug_repurposing(drug_db=drug_info_df, perturbation_score=perturbation_score, biodbnet=biodbnet)
     drug_score_file = os.path.join(output_dir, f"{context}_drug_score.csv")
     drug_score.to_csv(drug_score_file, index=False)
     print(f"Gene D score mapped to repurposing drugs saved to {drug_score_file}")
