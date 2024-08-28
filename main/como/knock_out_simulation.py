@@ -1,5 +1,5 @@
 import argparse
-from concurrent.futures import Future, as_completed, ProcessPoolExecutor
+from concurrent.futures import Future, as_completed, ProcessPoolExecutor, ThreadPoolExecutor
 import os
 import re
 import sys
@@ -410,6 +410,7 @@ def main(argv):
 
     output_dir = os.path.join(configs.data_dir, "results", context, disease)
     inhibitors_file = os.path.join(output_dir, f"{context}_{disease}_inhibitors.tsv")
+    thread_pool = ThreadPoolExecutor(max_workers=1)
 
     biodbnet = BioDBNet(show_progress=False)
 
