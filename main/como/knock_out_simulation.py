@@ -178,7 +178,7 @@ def score_gene_pairs(gene_pairs, filename, input_reg):
 
         d_score.at[p_gene, "score"] = d_s
 
-    d_score.index.name = "Gene"
+    d_score.index.name = "Gene ID"
     d_score.to_csv(os.path.join(configs.data_dir, filename))
     return d_score
 
