@@ -33,7 +33,7 @@ def _perform_knockout(
 
 def knock_out_simulation(
     model: cobra.Model,
-    inhibitors_filepath: Union[str, Path],
+    inhibitors_filepath: Path,
     drug_db: pd.DataFrame,
     reference_flux_filepath: Union[str, Path, None],
     test_all: bool,
