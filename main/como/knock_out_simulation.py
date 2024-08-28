@@ -118,14 +118,14 @@ def knock_out_simulation(
 
 
 def create_gene_pairs(
-    datadir,
-    model,
-    gene_ind2genes,
-    flux_solution,
-    flux_solution_ratios,
-    flux_solution_diffs,
-    has_effects_gene,
-    disease_genes,
+    datadir: Union[str, Path],
+    model: cobra.Model,
+    gene_ind2genes: set[str],
+    flux_solution: pd.DataFrame,
+    flux_solution_ratios: pd.DataFrame,
+    flux_solution_diffs: pd.DataFrame,
+    has_effects_gene: list[str],
+    disease_genes_filename: Path,
 ):
     disease_genes = pd.read_csv(str(os.path.join(datadir, disease_genes)))
     dag_dis_genes = pd.DataFrame()  # data analysis genes
