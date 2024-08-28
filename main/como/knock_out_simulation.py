@@ -56,9 +56,6 @@ def knock_out_simulation(
     drug_target_genes: pd.DataFrame
     if inhibitors_filepath.exists():
         print(f"Inhibitors file found at: {inhibitors_filepath}")
-        dt_genes = pd.read_csv(inhibitors_filepath, header=None, sep="\t")
-        dt_genes.rename(columns={0: "Gene ID"}, inplace=True)
-        dt_genes["Gene ID"] = dt_genes["Gene ID"].astype(str)
         drug_target_genes = pd.read_csv(inhibitors_filepath, sep="\t")
         # dt_genes.rename(columns={0: "Gene ID"}, inplace=True)
         drug_target_genes["Gene ID"] = drug_target_genes["Gene ID"].astype(str)
