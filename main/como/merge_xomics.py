@@ -114,7 +114,6 @@ def merge_logical_table(df: pd.DataFrame):
     I am unsure what to do in this situation
     """
     # return df_output.astype(int)
-    print(df)
     return df
 
 
@@ -354,7 +353,7 @@ def _merge_xomics(
     split_entrez = split_gene_expression_data(merge_data)
     split_entrez.rename(columns={"Gene": "ENTREZ_GENE_ID", "Data": "Active"}, inplace=True)
     split_entrez.to_csv(filepath, index_label="ENTREZ_GENE_ID")
-    files_dict[context_name] = filepath
+    files_dict[context_name] = filepath.as_posix()  # Must return as string to be able to serialize
 
     transcriptomic_details = get_transcriptmoic_details(merge_data)
     transcriptomic_details_filepath = filepath.parent / f"TranscriptomicDetails_{context_name}.csv"
@@ -437,7 +436,6 @@ def handle_context_batch(
             pweight,
         ).call_function("combine_zscores_main")
 
-    files_json = config.result_dir / "step1_results_files.json"
     for context_name in sheet_names:
         num_sources = counts[context_name]
         if adjust_method == "progressive":
@@ -479,7 +477,9 @@ def handle_context_batch(
 
         dict_list.update(files_dict)
 
-    with open(files_json, "w") as fp:
+    files_json = config.result_dir / "step1_results_files.json"
+    files_json.parent.mkdir(parents=True, exist_ok=True)
+    with open(files_json.as_posix(), "w") as fp:
         json.dump(dict_list, fp)
 
     return
@@ -656,7 +656,7 @@ def main():
     parser.add_argument(
         "-c",
         "--custom-requirement-file",
-        required="custom" in argv,  # required if --requriement-adjust is "custom",
+        required="custom" in sys.argv,  # required if --requriement-adjust is "custom",
         dest="custom_file",
         default="SKIP",
         help="Name of .xlsx file where first column is context names and second column is expression " "requirement for that context, in /main/data/",
@@ -723,7 +723,7 @@ def main():
         help="Proteomics weight for merging z-score distribution",
     )
 
-    args = parser.parse_args(argv)
+    args = parser.parse_args()
 
     proteomics_file = args.proteomics_file
     trnaseq_file = args.trnaseq_file

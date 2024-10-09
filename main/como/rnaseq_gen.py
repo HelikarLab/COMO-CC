@@ -300,7 +300,7 @@ def main():
         "prepared libraries. For example, mRNA, total-rna, scRNA, etc",
     )
 
-    args = parser.parse_args(argv)
+    args = parser.parse_args()
 
     config_filename = args.config_filename
     replicate_ratio = args.replicate_ratio
