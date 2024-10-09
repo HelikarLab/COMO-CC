@@ -80,5 +80,5 @@ jobs:
           tags: ${{ steps.metadata.outputs.tags }}
           labels: ${{ steps.metadata.outputs.labels }}
           builder: ${{ steps.buildx.outputs.name }}
-          platforms: ${{ matrix.platform }}
+          `platforms: ${{ matrix.platform }}
 
