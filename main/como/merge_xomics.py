@@ -34,7 +34,6 @@ r_file_path = config.code_dir / "rscripts" / "combine_distributions.R"
 
 class _MergedHeaderNames:
     PROTEOMICS = "prote"
-    MICROARRAY = "trans"
     TRNASEQ = "trnaseq"
     MRNASEQ = "mrnaseq"
     SCRNASEQ = "scrnaseq"
@@ -42,7 +41,6 @@ class _MergedHeaderNames:
 
 class _ExpressedHeaderNames:
     PROTEOMICS = f"{_MergedHeaderNames.PROTEOMICS}_exp"
-    MICROARRAY = f"{_MergedHeaderNames.MICROARRAY}_exp"
     TRNASEQ = f"{_MergedHeaderNames.TRNASEQ}_exp"
     MRNASEQ = f"{_MergedHeaderNames.MRNASEQ}_exp"
     SCRNASEQ = f"{_MergedHeaderNames.SCRNASEQ}_exp"
@@ -50,7 +48,6 @@ class _ExpressedHeaderNames:
 
 class _HighExpressionHeaderNames:
     PROTEOMICS = f"{_MergedHeaderNames.PROTEOMICS}_high"
-    MICROARRAY = f"{_MergedHeaderNames.MICROARRAY}_high"
     TRNASEQ = f"{_MergedHeaderNames.TRNASEQ}_high"
     MRNASEQ = f"{_MergedHeaderNames.MRNASEQ}_high"
     SCRNASEQ = f"{_MergedHeaderNames.SCRNASEQ}_high"

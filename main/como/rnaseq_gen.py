@@ -239,9 +239,8 @@ def main(argv):
         default=1.0,
         dest="replicate_ratio_high",
         help="Ratio of replicates required for a gene to be considered high-confidence. "
-        "High-confidence genes ignore consensus with other data-sources like proteomics or "
-        "microarray. Example: 0.9 means that for a gene to be high-confidence, at least 90% of "
-        "replicates in a group must pass the cutoff after normalization",
+        "High-confidence genes ignore consensus with other data-sources, such as proteomics. "
+        "Example: 0.9 means that for a gene to be high-confidence, at least 90% of replicates in a group must pass the cutoff after normalization",
     )
     parser.add_argument(
         "-gh",
@@ -250,10 +249,9 @@ def main(argv):
         required=False,
         default=1.0,
         dest="batch_ratio_high",
-        help="Ratio of groups (studies/batches) required for a gene to be considered high-confidence "
-        "within that group. HHigh-confidence genes ignore consensus with other data-sources like "
-        "proteomics or microarray. Example: 0.9 means that for a gene to be high-confidence, at "
-        "least 90% of groups in a study must have passed the replicate ratio test",
+        help="Ratio of groups (studies/batches) required for a gene to be considered high-confidence within that group. "
+        "High-confidence genes ignore consensus with other data-sources, like proteomics. "
+        "Example: 0.9 means that for a gene to be high-confidence, at least 90% of groups in a study must have passed the replicate ratio test",
     )
     parser.add_argument(
         "-t",
