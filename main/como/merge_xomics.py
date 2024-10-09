@@ -28,7 +28,8 @@ from como.project import Config
 # string = f.read()
 # f.close()
 # combine_dist_io = SignatureTranslatedAnonymousPackage(string, "combine_dist_io")
-r_file_path = Path(__file__) / "rscripts" / "combine_distributions.R"
+config = Config()
+r_file_path = config.code_dir / "rscripts" / "combine_distributions.R"
 
 
 class _MergedHeaderNames:
