@@ -1,7 +1,6 @@
 #!/usr/bin/python3
 
 import argparse
-import os
 import sys
 from pathlib import Path
 
@@ -12,11 +11,6 @@ from fast_bioservices.biodbnet import BioDBNet, Input, Output, Taxon
 from como import rpy2_api
 from como.project import Config
 
-# read and translate R functions
-# f = open(os.path.join(configs.rootdir, "src", "rscripts", "protein_transform.R"), "r")
-# string = f.read()
-# f.close()
-# protein_transform_io = SignatureTranslatedAnonymousPackage(string, "protein_transform_io")
 r_file_path = Path(__file__).parent / "rscripts" / "protein_transform.R"
 
 
@@ -26,14 +20,14 @@ def load_proteomics_data(datafilename, context_name):
     Add description......
     """
     config = Config()
-    dataFullPath = os.path.join(config.data_dir, "data_matrices", context_name, datafilename)
-    print('Data matrix is at "{}"'.format(dataFullPath))
+    data_path = config.data_dir / "data_matrices" / context_name / datafilename
+    print('Data matrix is at "{}"'.format(data_path))
 
-    if os.path.isfile(dataFullPath):
-        proteomics_data = pd.read_csv(dataFullPath, header=0)
+    if data_path.exists():
+        proteomics_data = pd.read_csv(data_path, header=0)
 
     else:
-        print("Error: file not found: {}".format(dataFullPath))
+        print("Error: file not found: {}".format(data_path))
 
         return None
 
@@ -81,11 +75,11 @@ def abundance_to_bool_group(context_name, group_name, abundance_matrix, rep_rati
     Descrioption....
     """
     config = Config()
-    output_dir = os.path.join(config.result_dir, context_name, "proteomics")
-    os.makedirs(output_dir, exist_ok=True)
+    output_dir = config.result_dir / context_name / "proteomics"
+    output_dir.mkdir(parents=True, exist_ok=True)
 
     # write group abundances to individual files
-    abundance_filepath = os.path.join(config.result_dir, context_name, "proteomics", "".join(["protein_abundance_", group_name, ".csv"]))
+    abundance_filepath = config.result_dir / context_name / "proteomics" / "".join(["protein_abundance_", group_name, ".csv"])
     abundance_matrix.to_csv(abundance_filepath, index_label="ENTREZ_GENE_ID")
 
     # Z-tranform
@@ -107,19 +101,19 @@ def abundance_to_bool_group(context_name, group_name, abundance_matrix, rep_rati
     abundance_matrix["high"] = 0
     abundance_matrix.loc[(abundance_matrix["pos"] >= hi_rep_ratio), ["high"]] = 1
 
-    bool_filepath = os.path.join(output_dir, f"bool_prot_Matrix_{context_name}_{group_name}.csv")
+    bool_filepath = output_dir / f"bool_prot_Matrix_{context_name}_{group_name}.csv"
     abundance_matrix.to_csv(bool_filepath, index_label="ENTREZ_GENE_ID")
 
 
 def to_bool_context(context_name, group_ratio, hi_group_ratio, group_names):
     config = Config()
-    output_dir = os.path.join(config.result_dir, context_name, "proteomics")
+    output_dir = config.result_dir / context_name / "proteomics"
     merged_df = pd.DataFrame(columns=["ENTREZ_GENE_ID", "expressed", "high"])
     merged_df.set_index(["ENTREZ_GENE_ID"], inplace=True)
     merged_hi_df = merged_df
 
     for group in group_names:
-        read_filepath = os.path.join(output_dir, f"bool_prot_Matrix_{context_name}_{group}.csv")
+        read_filepath = output_dir / f"bool_prot_Matrix_{context_name}_{group}.csv"
         read_df = pd.read_csv(read_filepath)
         read_df.set_index("ENTREZ_GENE_ID", inplace=True)
         read_df = read_df[["expressed", "high"]]
@@ -137,7 +131,7 @@ def to_bool_context(context_name, group_ratio, hi_group_ratio, group_names):
         merged_hi_df.apply(lambda x: sum(x) / len(merged_hi_df.columns) >= hi_group_ratio, axis=1, result_type="reduce")
 
     out_df = pd.merge(merged_df, merged_hi_df, right_index=True, left_index=True)
-    out_filepath = os.path.join(output_dir, f"Proteomics_{context_name}.csv")
+    out_filepath = output_dir / f"Proteomics_{context_name}.csv"
     out_df.to_csv(out_filepath, index_label="ENTREZ_GENE_ID")
     print("Test Data Saved to {}".format(out_filepath))
 
@@ -150,34 +144,26 @@ def load_proteomics_tests(filename, context_name):
     config = Config()
 
     def load_empty_dict():
-        savepath = os.path.join(
-            config.data_dir,
-            "data_matrices",
-            "placeholder",
-            "placeholder_empty_data.csv",
-        )
+        savepath = config.data_dir / "data_matrices" / "placeholder" / "placeholder_empty_data.csv"
         dat = pd.read_csv(savepath, index_col="ENTREZ_GENE_ID")
         return "dummy", dat
 
     if not filename or filename == "None":  # if not using proteomics load empty dummy data matrix
         return load_empty_dict()
 
-    inquiry_full_path = os.path.join(config.data_dir, "config_sheets", filename)
-    if not os.path.isfile(inquiry_full_path):  # check that config file exists
-        print("Error: file not found {}".format(inquiry_full_path))
-        sys.exit()
+    inquiry_full_path = config.data_dir / "config_sheets" / filename
+    if not inquiry_full_path.exists():
+        raise FileNotFoundError(f"Error: file not found {inquiry_full_path}")
 
     filename = "Proteomics_{}.csv".format(context_name)
-    fullsavepath = os.path.join(config.result_dir, context_name, "proteomics", filename)
-    if os.path.isfile(fullsavepath):
-        data = pd.read_csv(fullsavepath, index_col="ENTREZ_GENE_ID")
-        print("Read from {}".format(fullsavepath))
-
+    full_save_filepath = config.result_dir / context_name / "proteomics" / filename
+    if full_save_filepath.exists():
+        data = pd.read_csv(full_save_filepath, index_col="ENTREZ_GENE_ID")
+        print(f"Read from {full_save_filepath}")
         return context_name, data
 
     else:
-        print(f"Proteomics gene expression file for {context_name} was not found at {fullsavepath}. This may be " f"intentional.")
-
+        print(f"Proteomics gene expression file for {context_name} was not found at {full_save_filepath}. Is this intentional?")
         return load_empty_dict()
 
 
@@ -192,7 +178,7 @@ def proteomics_gen(
         raise ValueError("Quantile must be an integer from 0 to 100")
     quantile /= 100
 
-    prot_config_filepath = os.path.join(config.data_dir, "config_sheets", config_file)
+    prot_config_filepath = config.data_dir / "config_sheets" / config_file
     print('Config file is at "{}"'.format(prot_config_filepath))
 
     xl = pd.ExcelFile(prot_config_filepath)
