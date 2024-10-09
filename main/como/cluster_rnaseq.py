@@ -1,24 +1,12 @@
 import argparse
 import os
 import sys
-# from rpy2.robjects.packages import importr
-# from rpy2.robjects import pandas2ri
-import argparse
-import numpy as np
 from pathlib import Path
 
+import numpy as np
 import rpy2_api
-from project import Configs
 from como_utilities import stringlist_to_list
-
-# enable r to py conversion
-# pandas2ri.activate()
-
-# import R libraries
-# ggplot2 = importr("ggplot2")
-# ggrepel = importr("ggrepel")
-# tidyverse = importr("tidyverse")
-# uwot = importr("uwot")
+from project import Config
 
 # read and translate R functions
 configs = Configs()
