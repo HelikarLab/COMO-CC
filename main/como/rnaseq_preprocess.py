@@ -26,8 +26,11 @@ def create_counts_matrix(context_name):
     print(f"Creating Counts Matrix for '{context_name}'")
 
     # call generate_counts_matrix.R to create count matrix from COMO_input folder
-    rpy2_hook = rpy2_api.Rpy2(r_file_path=r_file_path, data_dir=input_dir, out_dir=matrix_output_dir)
-    rpy2_hook.call_function("generate_counts_matrix_main")
+    rpy2_api.Rpy2(
+        r_file_path=r_file_path,
+        data_dir=input_dir.as_posix(),
+        out_dir=matrix_output_dir.as_posix(),
+    ).call_function("generate_counts_matrix_main")
 
 
 def create_config_df(context_name):
@@ -45,7 +48,7 @@ def create_config_df(context_name):
         try:
             # Match S___R___r___
             # \d{1,3} matches 1-3 digits
-            # (r\d{1,3})? matches an option "r" followed by three digits
+            # (?:r\d{1,3})? matches an option "r" followed by three digits
             label = re.findall(r"S\d{1,3}R\d{1,3}(?:r\d{1,3})?", gcfilename.as_posix())[0]
 
         except IndexError:
