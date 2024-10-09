@@ -1,9 +1,10 @@
 #!/usr/bin/python3
 import argparse
-from concurrent.futures import Future, as_completed, ProcessPoolExecutor
 import os
 import re
 import sys
+from concurrent.futures import Future, ProcessPoolExecutor, as_completed
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Union
 
@@ -11,8 +12,9 @@ import cobra
 import numpy as np
 import pandas as pd
 from fast_bioservices import BioDBNet, Input, Output
+from project import Config
 
-from project import Configs
+configs = Config()
 
 configs = Configs()
 
