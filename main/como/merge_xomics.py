@@ -1,24 +1,20 @@
 #!/usr/bin/python3
 
 import argparse
-from enum import Enum
 import json
 import os
 import re
 import sys
 from collections import Counter
-from pathlib import Path
+from enum import Enum
 
-from como import microarray_gen
+import numpy as np
 import pandas as pd
 from fast_bioservices import BioDBNet, Input, Output
 
-from como import proteomics_gen
-from como import rnaseq_gen
-from como import rpy2_api
+from como import proteomics_gen, rnaseq_gen, rpy2_api
 from como.como_utilities import split_gene_expression_data
 from como.project import Config
-
 
 # enable r to py conversion
 # pandas2ri.activate()
