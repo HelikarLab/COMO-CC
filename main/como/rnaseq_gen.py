@@ -1,18 +1,17 @@
 #!/usr/bin/python3
 
 import argparse
-from enum import Enum
-import os
 import re
 import sys
+from enum import Enum
 from pathlib import Path
 from typing import Optional
 
 import pandas as pd
+from rpy2.robjects import pandas2ri
 
 from como import rpy2_api
 from como.project import Config
-from rpy2.robjects import pandas2ri
 
 # enable r to py conversion
 pandas2ri.activate()
@@ -27,22 +26,15 @@ def load_rnaseq_tests(filename, context_name, lib_type):
     config = Config()
 
     def load_dummy_dict():
-        savepath = os.path.join(
-            config.data_dir,
-            "data_matrices",
-            "placeholder",
-            "placeholder_empty_data.csv",
-        )
-        dat = pd.read_csv(savepath, index_col="ENTREZ_GENE_ID")
+        dat = pd.read_csv(config.data_dir / "data_matrices" / "placeholder" / "placeholder_empty_data.csv", index_col="ENTREZ_GENE_ID")
         return "dummy", dat
 
     if not filename or filename == "None":  # not using this data type, use empty dummy data matrix
         return load_dummy_dict()
 
-    inquiry_full_path = os.path.join(config.data_dir, "config_sheets", filename)
-    if not os.path.isfile(inquiry_full_path):  # check that config file exist (isn't needed to load, but helps user)
-        print(f"Error: Config file not found at {inquiry_full_path}")
-        sys.exit()
+    inquiry_full_path = config.data_dir / "config_sheets" / filename
+    if not inquiry_full_path.exists():  # check that config file exist (isn't needed to load, but helps user)
+        raise FileNotFoundError(f"Error: Config file not found at {inquiry_full_path}")
 
     if lib_type == "total":  # if using total RNA-seq library prep
         filename = f"rnaseq_total_{context_name}.csv"
@@ -51,19 +43,17 @@ def load_rnaseq_tests(filename, context_name, lib_type):
     elif lib_type == "scrna":  # if using single-cell RNA-seq
         filename = f"rnaseq_scrna_{context_name}.csv"
     else:
-        print(f"Unsupported RNA-seq library type: {lib_type}. Must be one of 'total', 'mrna', 'sc'.")
-        sys.exit()
+        raise ValueError(f"Unsupported RNA-seq library type: {lib_type}. Must be one of 'total', 'mrna', 'sc'.")
 
-    fullsavepath = os.path.join(config.result_dir, context_name, lib_type, filename)
-
-    if os.path.isfile(fullsavepath):
-        data = pd.read_csv(fullsavepath, index_col="ENTREZ_GENE_ID")
-        print(f"Read from {fullsavepath}")
+    save_filepath = config.result_dir / context_name / lib_type / filename
+    if save_filepath.exists():
+        data = pd.read_csv(save_filepath, index_col="ENTREZ_GENE_ID")
+        print(f"Read from {save_filepath}")
         return context_name, data
 
     else:
         print(
-            f"{lib_type} gene expression file for {context_name} was not found at {fullsavepath}. This may be "
+            f"{lib_type} gene expression file for {context_name} was not found at {save_filepath}. This may be "
             f"intentional. Contexts where {lib_type} data can be found in /work/data/results/{context_name}/ will "
             "still be used if found for other contexts."
         )
@@ -95,28 +85,25 @@ def handle_context_batch(
 
     for context_name in sheet_names:
         print(f"\nStarting '{context_name}'")
-        rnaseq_output_file = f"rnaseq_{prep}_{context_name}.csv"
-        rnaseq_output_filepath = os.path.join(config.result_dir, context_name, prep, rnaseq_output_file)
 
-        rnaseq_input_file = f"gene_counts_matrix_{prep}_{context_name}.csv"
-        rnaseq_input_filepath = os.path.join(config.data_dir, "data_matrices", context_name, rnaseq_input_file)
-
-        if not os.path.exists(rnaseq_input_filepath):
+        rnaseq_input_filepath = config.data_dir / "data_matrices" / context_name / f"gene_counts_matrix_{prep}_{context_name}.csv"
+        if not rnaseq_input_filepath.exists():
             print(f"Gene counts matrix not found at {rnaseq_input_filepath}, skipping...")
             continue
 
-        gene_info_filepath = os.path.join(config.data_dir, "gene_info.csv")
-        os.makedirs(os.path.dirname(rnaseq_output_filepath), exist_ok=True)
+        gene_info_filepath = config.data_dir / "gene_info.csv"
+        rnaseq_output_filepath = config.result_dir / context_name / prep / f"rnaseq_{prep}_{context_name}.csv"
+        rnaseq_output_filepath.parent.mkdir(parents=True, exist_ok=True)
 
         print(f"Gene info:\t\t{gene_info_filepath}")
         print(f"Count matrix:\t\t{rnaseq_input_filepath}")
 
         rpy2_api.Rpy2(
             r_file_path=r_file_path,
-            counts_matrix_file=rnaseq_input_filepath,
+            counts_matrix_file=rnaseq_input_filepath.as_posix(),
             config_file=config_filepath.as_posix(),
-            out_file=rnaseq_output_filepath,
-            info_file=gene_info_filepath,
+            out_file=rnaseq_output_filepath.as_posix(),
+            info_file=gene_info_filepath.as_posix(),
             context_name=context_name,
             prep=prep,
             replicate_ratio=replicate_ratio,
@@ -148,7 +135,7 @@ def rnaseq_gen(
     cut_off: Optional[int] = None,
     prep: Optional[str] = "",
 ) -> None:
-    if not technique in Technique:
+    if technique not in Technique:
         raise ValueError(f"Technique must be one of {Technique}")
 
     if technique == Technique.TPM:
