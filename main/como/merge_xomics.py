@@ -56,6 +56,84 @@ class _HighExpressionHeaderNames:
     SCRNASEQ = f"{_MergedHeaderNames.SCRNASEQ}_high"
 
 
+# Merge Output
+def merge_logical_table(df: pd.DataFrame):
+    """
+    Merge the Rows of Logical Table belongs to the same ENTREZ_GENE_ID
+    :param df:
+    :return: pandas dataframe of merged table
+    """
+    # step 1: get all plural ENTREZ_GENE_IDs in the input table, extract unique IDs
+
+    df.reset_index(drop=False, inplace=True)
+    df.dropna(axis=0, subset=["ENTREZ_GENE_ID"], inplace=True)
+    df["ENTREZ_GENE_ID"] = df["ENTREZ_GENE_ID"].str.replace(" /// ", "//").astype(str)
+
+    single_entrez_ids: list[str] = df[~df["ENTREZ_GENE_ID"].str.contains("//")]["ENTREZ_GENE_ID"].tolist()
+    multiple_entrez_ids: list[str] = df[df["ENTREZ_GENE_ID"].str.contains("//")]["ENTREZ_GENE_ID"].tolist()
+    id_list: list[str] = []
+    for i in multiple_entrez_ids:
+        ids = i.split("//")
+        id_list.extend(ids)
+
+        duplicate_rows = pd.DataFrame([])
+        for j in ids:
+            rows = df.loc[df["ENTREZ_GENE_ID"] == i].copy()
+            rows["ENTREZ_GENE_ID"] = j
+            duplicate_rows = pd.concat([duplicate_rows, rows], axis=0)
+
+        df = pd.concat([df, pd.DataFrame(duplicate_rows)], axis=0, ignore_index=True)
+        df.drop(df[df["ENTREZ_GENE_ID"] == i].index, inplace=True)
+
+    full_entrez_id_sets: set[str] = set()
+    entrez_dups_list: list[list[str]] = []
+    multi_entrez_index = list(range(len(multiple_entrez_ids)))
+
+    for i in range(len(multiple_entrez_ids)):
+        if i not in multi_entrez_index:
+            continue
+
+        set1 = set(multiple_entrez_ids[i].split("//"))
+        multi_entrez_index.remove(i)
+
+        for j in multi_entrez_index:
+            set2 = set(multiple_entrez_ids[j].split("//"))
+            intersect = set1.intersection(set2)
+            if bool(intersect):
+                set1 = set1.union(set2)
+                multi_entrez_index.remove(j)
+
+        sortlist = list(set1)
+        sortlist.sort(key=int)
+        new_entrez_id = " /// ".join(sortlist)
+        full_entrez_id_sets.add(new_entrez_id)
+
+    for i in full_entrez_id_sets:
+        entrez_dups_list.append(i.split(" /// "))
+    entrez_dups_dict = dict(zip(full_entrez_id_sets, entrez_dups_list))
+
+    for merged_entrez_id, entrez_dups_list in entrez_dups_dict.items():
+        df["ENTREZ_GENE_ID"].replace(to_replace=entrez_dups_list, value=merged_entrez_id, inplace=True)
+
+    df.set_index("ENTREZ_GENE_ID", inplace=True)
+    df = df.fillna(-1).groupby(level=0).max()
+    df.replace(-1, np.nan, inplace=True)
+
+    # TODO: Test if this is working properly
+    """
+    There seems to be an error when running Step 2.1 in the pipeline.ipynb file
+    The commented-out return statement tries to return the df_output dataframe values as integers, but NaN values exist
+        Because of this, it is unable to do so.
+    If we change this to simply output the database, the line "np.where(posratio >= top_proportion . . ." (line ~162)
+        Fails because it is comparing floats and strings
+
+    I am unsure what to do in this situation
+    """
+    # return df_output.astype(int)
+    print(df)
+    return df
+
+
 def get_transcriptmoic_details(merged_df: pd.DataFrame) -> pd.DataFrame:
     """
     This function will get the following details of transcriptomic data:
