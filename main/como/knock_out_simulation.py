@@ -3,6 +3,8 @@ from concurrent.futures import Future, as_completed, ProcessPoolExecutor, Thread
 import os
 import re
 import sys
+from concurrent.futures import Future, ProcessPoolExecutor, as_completed
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Union
 
@@ -10,10 +12,19 @@ import cobra
 import numpy as np
 import pandas as pd
 from fast_bioservices import BioDBNet, Input, Output
+from project import Config
 
-from project import Configs
+configs = Config()
 
-configs = Configs()
+
+@dataclass
+class KnockoutResults:
+    model: cobra.Model
+    gene_ind2genes: set[str]
+    genes_with_metabolic_effects: list[str]
+    flux_solution: pd.DataFrame
+    flux_solution_ratios: pd.DataFrame
+    flux_solution_diffs: pd.DataFrame
 
 
 def _perform_knockout(
@@ -38,7 +49,7 @@ def knock_out_simulation(
     reference_flux_filepath: Union[str, Path, None],
     test_all: bool,
     pars_flag: bool,
-):
+) -> KnockoutResults:
     reference_solution: cobra.Solution
     if reference_flux_filepath is not None:
         reference_flux_filepath: Path = Path(reference_flux_filepath)
@@ -107,7 +118,7 @@ def knock_out_simulation(
     flux_solution_ratios = flux_solution.div(wild_type_model["fluxes"], axis=0)
     flux_solution_diffs = flux_solution.sub(wild_type_model["fluxes"], axis=0)
 
-    return (
+    return KnockoutResults(
         model,
         gene_ind2genes,
         genes_with_metabolic_effects,
@@ -270,8 +281,7 @@ def main(argv):
     parser = argparse.ArgumentParser(
         prog="knock_out_simulation.py",
         description="This script is responsible for mapping drug targets in metabolic models, performing knock out simulations, and comparing simulation results with disease genes. It also identified drug targets and repurposable drugs.",
-        epilog="For additional help, please post questions/issues in the MADRID GitHub repo at "
-        "https://github.com/HelikarLab/COMO",
+        epilog="For additional help, please post questions/issues in the MADRID GitHub repo at " "https://github.com/HelikarLab/COMO",
     )
     parser.add_argument(
         "-m",
@@ -422,8 +432,8 @@ def main(argv):
         pars_flag=pars_flag,
     )
 
-    flux_solution_diffs.to_csv(os.path.join(output_dir, "flux_diffs_KO.csv"))
-    flux_solution_ratios.to_csv(os.path.join(output_dir, "flux_ratios_KO.csv"))
+    knockout_results.flux_solution_diffs.to_csv(output_dir / "flux_diffs_KO.csv")
+    knockout_results.flux_solution_ratios.to_csv(output_dir / "flux_ratios_KO.csv")
 
     gene_pairs_down = create_gene_pairs(
         configs.data_dir,
