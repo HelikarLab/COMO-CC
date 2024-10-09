@@ -1,6 +1,4 @@
 import argparse
-import os
-import sys
 from pathlib import Path
 
 import numpy as np
@@ -144,7 +142,6 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    wd = os.path.join(configs.data_dir, "results")
     context_names = stringlist_to_list(args.context_names)
     technique = args.technique.lower()
     clust_algo = args.clust_algo.lower()
@@ -252,7 +249,7 @@ def main() -> None:
 
     cluster_samples = rpy2_api.Rpy2(
         r_file_path=r_file_path,
-        wd=wd,
+        wd=configs.result_dir,
         context_names=context_names,
         technique=technique,
         clust_algo=clust_algo,
