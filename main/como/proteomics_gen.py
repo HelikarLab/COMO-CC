@@ -1,16 +1,16 @@
 #!/usr/bin/python3
 
 import argparse
-import sys
 import os
-import pandas as pd
-import numpy as np
-from como import instruments
-from como.project import Config
+import sys
 from pathlib import Path
 
-from como import rpy2_api
+import numpy as np
+import pandas as pd
+from fast_bioservices.biodbnet import BioDBNet, Input, Output, Taxon
 
+from como import rpy2_api
+from como.project import Config
 
 # read and translate R functions
 # f = open(os.path.join(configs.rootdir, "src", "rscripts", "protein_transform.R"), "r")
