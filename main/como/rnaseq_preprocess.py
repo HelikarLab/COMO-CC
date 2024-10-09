@@ -309,10 +309,10 @@ def rnaseq_preprocess(context_names: str, mode: str, input_format: Input, taxon_
     if not mode == "make" and not mode == "provide":
         raise ValueError("mode must be either 'make' or 'provide'")
 
-    if not input_format in [Input.ENSEMBL_GENE_ID, Input.GENE_SYMBOL, Input.GENE_ID]:
+    if input_format not in [Input.ENSEMBL_GENE_ID, Input.GENE_SYMBOL, Input.GENE_ID]:
         raise ValueError("input_format must be either 'ENSEMBL_GENE_ID', 'GENE_SYMBOL', or 'GENE_ID'")
 
-    if not isinstance(taxon_id, int) and not taxon_id in ["human", "mouse"]:
+    if not isinstance(taxon_id, int) and taxon_id not in ["human", "mouse"]:
         raise ValueError("taxon_id must be either an integer, or accepted string ('mouse', 'human')")
 
     handle_context_batch(context_names=context_names, mode=mode, input_format=input_format, taxon_id=taxon_id, provided_matrix_file=matrix_file)
@@ -329,6 +329,7 @@ def parse_args():
     If using --info-matrix-config:
     create config file at /work/data/config_sheets/rnaseq_data_inputs_auto.xlsx
     """
+
     parser = argparse.ArgumentParser(
         prog="rnaseq_preprocess.py",
         description="""
@@ -400,13 +401,13 @@ def parse_args():
     parser.add_argument(
         "-m",
         "--matrix",
-        required="--provide-matrix" in argv,  # require if using --provide-matrix flag,
+        required="--provide-matrix" in sys.argv,  # require if using --provide-matrix flag,
         dest="provided_matrix_fname",
         default="SKIP",
         help="Name of provided counts matrix in " "/work/data/data_matrices/<context name>/<NAME OF FILE>.csv",
     )
 
-    args = parser.parse_args(argv)
+    args = parser.parse_args()
     args.context_names = como_utilities.stringlist_to_list(args.context_names)
 
     return args

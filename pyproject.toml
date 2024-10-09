@@ -39,6 +39,3 @@ allow-direct-references=true
 pythonpath = [
     "main/src"
 ]
-
-[tool.ruff]
-line-length = 120
