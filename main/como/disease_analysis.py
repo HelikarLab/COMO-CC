@@ -5,15 +5,14 @@ import os
 import sys
 from pathlib import Path
 
+import GSEpipelineFast
 import pandas as pd
 import rpy2.robjects as ro
+import rpy2_api
 from fast_bioservices import BioDBNet, Input, Output
+from project import Configs
 from rpy2.robjects import pandas2ri
 from rpy2.robjects.packages import importr
-
-import GSEpipelineFast
-import rpy2_api
-from project import Configs
 
 configs = Configs()
 
@@ -106,7 +105,7 @@ def breakDownEntrezs(disease):
 #     return gene_expressions
 
 
-def pharse_configs(config_filepath, sheet):
+def parse_configs(config_filepath, sheet):
     """
     Read microarray config files
     param: config_filepath - string, path to microarray formatted disease configuration xlsx file
@@ -139,7 +138,7 @@ def get_microarray_diff_gene_exp(config_filepath, disease_name, target_path, tax
 
     return: dataframe with fold changes, FDR adjusted p-values,
     """
-    query_table, df_target = pharse_configs(config_filepath, disease_name)
+    query_table, df_target = parse_configs(config_filepath, disease_name)
     df_target.to_csv(target_path, index=False, sep="\t")
     print(query_table)
     sr = query_table["GSE ID"]
