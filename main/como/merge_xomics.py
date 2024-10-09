@@ -2,7 +2,6 @@
 
 import argparse
 import json
-import os
 import re
 import sys
 from collections import Counter
@@ -16,18 +15,6 @@ from como import proteomics_gen, rnaseq_gen, rpy2_api
 from como.como_utilities import split_gene_expression_data
 from como.project import Config
 
-# enable r to py conversion
-# pandas2ri.activate()
-
-# import R libraries
-# ggplot2 = importr("ggplot2")
-# tidyverse = importr("tidyverse")
-
-# read and translate R functions
-# f = open(os.path.join(configs.rootdir, "src", "rscripts", "combine_distributions.R"), "r")
-# string = f.read()
-# f.close()
-# combine_dist_io = SignatureTranslatedAnonymousPackage(string, "combine_dist_io")
 config = Config()
 r_file_path = config.code_dir / "rscripts" / "combine_distributions.R"
 
@@ -358,10 +345,10 @@ def _merge_xomics(
     # merge_data = merge_data.astype(int)
     merge_data = merge_data
 
-    filepath = os.path.join(config.result_dir, context_name, f"merged_{context_name}.csv")
+    filepath = config.result_dir / context_name / f"merged_{context_name}.csv"
     merge_data.to_csv(filepath, index_label="ENTREZ_GENE_ID")
 
-    filepath = os.path.join(config.result_dir, context_name, f"ActiveGenes_{context_name}_Merged.csv")
+    filepath = config.result_dir / context_name / f"ActiveGenes_{context_name}_Merged.csv"
     merge_data.reset_index(drop=False, inplace=True)
 
     split_entrez = split_gene_expression_data(merge_data)
@@ -370,14 +357,10 @@ def _merge_xomics(
     files_dict[context_name] = filepath
 
     transcriptomic_details = get_transcriptmoic_details(merge_data)
-    transcriptomic_details_directory_path = os.path.dirname(filepath)
-    transcriptomic_details_filepath = os.path.join(
-        transcriptomic_details_directory_path,
-        f"TranscriptomicDetails_{context_name}.csv",
-    )
+    transcriptomic_details_filepath = filepath.parent / f"TranscriptomicDetails_{context_name}.csv"
     transcriptomic_details.to_csv(transcriptomic_details_filepath, index=False)
 
-    print(f"{context_name}: Save to {os.path.basename(filepath)}\n")
+    print(f"{context_name}: Save to {filepath}\n")
 
     return files_dict
 
@@ -411,7 +394,7 @@ def handle_context_batch(
         proteomics_file,
     ]:
         if file is not None:
-            config_filepath = os.path.join(config.config_dir, file)
+            config_filepath = config.config_dir / file
             xl = pd.ExcelFile(config_filepath, engine="openpyxl")
             sheet_names += xl.sheet_names
 
@@ -441,7 +424,7 @@ def handle_context_batch(
         print(f"Using {merge_distro} distribution for merging")
         rpy2_api.Rpy2(
             r_file_path,
-            os.path.join(config.result_dir),
+            config.result_dir.as_posix(),
             sheet_names,
             use_mrna,
             use_trna,
@@ -454,7 +437,7 @@ def handle_context_batch(
             pweight,
         ).call_function("combine_zscores_main")
 
-    files_json = os.path.join(config.result_dir, "step1_results_files.json")
+    files_json = config.result_dir / "step1_results_files.json"
     for context_name in sheet_names:
         num_sources = counts[context_name]
         if adjust_method == "progressive":
@@ -529,7 +512,7 @@ def merge_xomics(
     config = Config()
     # read custom expression requirment file if used
     if custom_file is not None:
-        custom_filepath = os.path.join(config.data_dir, custom_file)
+        custom_filepath = config.data_dir / custom_file
         custom_df = pd.read_excel(custom_filepath, sheet_name=0)
         custom_df.columns = ["context", "req"]
     else:
@@ -761,7 +744,7 @@ def main(argv):
 
     # read custom expression requirment file if used
     if custom_file != "SKIP":
-        custom_filepath = os.path.join(config.data_dir, custom_file)
+        custom_filepath = config.data_dir / custom_file
         custom_df = pd.read_excel(custom_filepath, sheet_name=0)
         custom_df.columns = ["context", "req"]
     else:
