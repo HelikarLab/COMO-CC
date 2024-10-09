@@ -9,14 +9,8 @@ from como_utilities import stringlist_to_list
 from project import Config
 
 # read and translate R functions
-configs = Configs()
-r_file_path = Path(configs.root_dir, "src", "rscripts", "cluster_samples.R")
-
-
-# f = open(os.path.join(configs.rootdir, "src", "rscripts", "cluster_samples.R"), "r")
-# string = f.read()
-# f.close()
-# cluster_io = SignatureTranslatedAnonymousPackage(string, "cluster_io")
+configs = Config()
+r_file_path = Path(configs.code_dir, "rscripts", "cluster_samples.R")
 
 
 def main() -> None:
