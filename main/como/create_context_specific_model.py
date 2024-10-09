@@ -1,6 +1,5 @@
 import argparse
 import collections
-import os
 import re
 import sys
 from enum import Enum
@@ -250,7 +249,7 @@ def seed_imat(cobra_model, s_matrix, lb, ub, expr_vector, expr_thesh, idx_force,
     print("Obtained flux values")
     context_cobra_model = cobra_model.copy()
     r_ids = [r.id for r in context_cobra_model.reactions]
-    pd.DataFrame({"rxns": r_ids}).to_csv(os.path.join(config.data_dir, "rxns_test.csv"))
+    pd.DataFrame({"rxns": r_ids}).to_csv(config.data_dir / "rxns_test.csv")
     remove_rxns = [r_ids[int(i)] for i in range(s_matrix.shape[1]) if not np.isin(i, context_rxns)]
     flux_df = pd.DataFrame(columns=["rxn", "flux"])
     for idx, (_, val) in enumerate(fluxes.items()):
@@ -442,7 +441,7 @@ def _create_context_specific_model(
         model_reactions = [reaction.id for reaction in context_model_cobra.reactions]
         reaction_intersections = set(imat_reactions).intersection(model_reactions)
         flux_df = flux_df[~flux_df["rxn"].isin(reaction_intersections)]
-        flux_df.to_csv(str(os.path.join(config.data_dir, "results", context_name, f"{recon_algorithm}_flux.csv")))
+        flux_df.to_csv(config.data_dir / "results" / context_name / f"{recon_algorithm}_flux.csv")
 
     elif recon_algorithm == "TINIT":
         context_model_cobra = seed_tinit(cobra_model, s_matrix, lb, ub, expr_vector, solver, idx_force)
@@ -460,7 +459,6 @@ def _create_context_specific_model(
     #         if rxn not in final_rxns:
     #             flux_df = flux_df[flux_df.rxn != rxn]
     #
-    #     flux_df.to_csv(os.path.join(configs.datadir, "results", context_name, f"{recon_algorithm}_flux.csv"))
 
     incon_df = pd.DataFrame({"general_infeasible_rxns": list(incon_rxns)})
     infeas_exp_df = pd.DataFrame({"expressed_infeasible_rxns": infeas_exp_rxns})
@@ -495,8 +493,8 @@ class Solver(Enum):
 
 def create_context_specific_model(
     context_name: str,
-    reference_model: str,
-    genes_file: str,
+    reference_model: Path,
+    genes_file: Path,
     objective: str = "biomass_reaction",
     boundary_rxns_filepath: Optional[str] = None,
     exclude_rxns_filepath: Optional[str] = None,
@@ -507,13 +505,12 @@ def create_context_specific_model(
     solver: Solver = Solver.GLPK,
     output_filetypes: list[str] = ["mat"],
 ):
-    config = Config()
-    if not os.path.exists(reference_model):
+    if not reference_model.exists():
         raise FileNotFoundError(f"Reference model not found at {reference_model}")
-
-    if not os.path.exists(genes_file):
+    if not genes_file.exists():
         raise FileNotFoundError(f"Active genes file not found at {genes_file}")
 
+    config = Config()
     print(f"Active Genes: {genes_file}")
 
     boundary_rxns = []
@@ -623,42 +620,33 @@ def create_context_specific_model(
     )
 
     infeas_df.to_csv(
-        os.path.join(
-            config.result_dir,
-            context_name,
-            context_name + "_infeasible_rxns.csv",
-        ),
+        config.result_dir / context_name / f"{context_name}_infeasible_rxns.csv",
         index=False,
     )
 
     if algorithm == Algorithm.FASTCORE:
         pd.DataFrame(core_list).to_csv(
-            os.path.join(
-                config.result_dir,
-                context_name,
-                context_name + "_core_rxns.csv",
-            ),
+            config.result_dir / context_name / f"{context_name}_core_rxns.csv",
             index=False,
         )
 
-    output_directory = os.path.join(config.result_dir, context_name)
+    output_directory = config.result_dir / context_name
     if "mat" in output_filetypes:
         cobra.io.save_matlab_model(
             context_model,
-            os.path.join(output_directory, f"{context_name}_SpecificModel_{algorithm.value}.mat"),
+            output_directory / f"{context_name}_SpecificModel_{algorithm.value}.mat",
         )
     if "xml" in output_filetypes:
         cobra.io.write_sbml_model(
             context_model,
-            os.path.join(output_directory, f"{context_name}_SpecificModel_{algorithm.value}.xml"),
+            output_directory / f"{context_name}_SpecificModel_{algorithm.value}.xml",
         )
     if "json" in output_filetypes:
         cobra.io.save_json_model(
             context_model,
-            os.path.join(output_directory, f"{context_name}_SpecificModel_{algorithm.value}.json"),
+            output_directory / f"{context_name}_SpecificModel_{algorithm.value}.json",
         )
 
-    # os.path.join(configs.datadir, "results", context_name, outputfile)
     print("")
     print(f"Saved output file to {output_directory}")
     print(f"Number of Genes: {len(context_model.genes):,}")
@@ -803,10 +791,10 @@ def main(argv):
     """
     args = parse_args(argv)
 
-    context_name = args.context_name
-    reference_model = args.modelfile
-    genefile = args.genefile
-    objective = args.objective
+    context_name: str = args.context_name
+    reference_model: Path = Path(args.modelfile)
+    genefile: Path = Path(args.genefile)
+    objective: str = args.objective
     boundary_rxns_filepath = args.boundary_rxns_filepath
     exclude_rxns_filepath = args.exclude_rxns_filepath
     force_rxns_filepath = args.force_rxns_filepath
@@ -816,10 +804,10 @@ def main(argv):
     solver = args.solver.upper()
     output_filetypes = stringlist_to_list(args.output_filetypes)
 
-    if not os.path.exists(reference_model):
+    if not reference_model.exists():
         raise FileNotFoundError(f"Reference model not found at {reference_model}")
 
-    if not os.path.exists(genefile):
+    if not genefile.exists():
         raise FileNotFoundError(f"Active genes file not found at {genefile}")
 
     print(f"Active Genes: {genefile}")
