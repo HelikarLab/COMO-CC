@@ -347,14 +347,15 @@ def _create_context_specific_model(
     force excluded even if they meet GPR association requirements using the force exclude file.
     """
     config = Config()
-    if general_model_file[-4:] == ".mat":
-        cobra_model = cobra.io.load_matlab_model(general_model_file)
-    elif general_model_file[-4:] == ".xml":
-        cobra_model = cobra.io.read_sbml_model(general_model_file)
-    elif general_model_file[-5:] == ".json":
-        cobra_model = cobra.io.load_json_model(general_model_file)
-    else:
-        raise NameError("reference model format must be .xml, .mat, or .json")
+    match general_model_file.suffix:
+        case ".mat":
+            cobra_model = cobra.io.load_matlab_model(general_model_file)
+        case ".xml":
+            cobra_model = cobra.io.read_sbml_model(general_model_file)
+        case ".json":
+            cobra_model = cobra.io.load_json_model(general_model_file)
+        case _:
+            raise NameError("reference model format must be .xml, .mat, or .json")
 
     cobra_model.objective = {getattr(cobra_model.reactions, objective): 1}  # set objective
 
