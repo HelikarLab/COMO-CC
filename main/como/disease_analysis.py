@@ -4,7 +4,6 @@ import json
 import sys
 from pathlib import Path
 
-import GSEpipelineFast
 import pandas as pd
 import rpy2.robjects as ro
 import rpy2_api
@@ -29,7 +28,7 @@ def get_rnaseq_diff_gene_exp(config_filepath, disease_name, context_name, taxon_
     """
     Get differential gene expression for RNA-seq data
 
-    param: config_filepath - string, path to microarray formatted disease configuration xlsx file
+    param: config_filepath - path to rna-seq disease configuration xlsx file
     param: disease_name - string, disease name which should correspond to sheet name in disease config xlsx file
     param: context_name - string, context name which should correspond to folder in 'results' folder
 
