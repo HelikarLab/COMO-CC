@@ -16,7 +16,15 @@ from project import Config
 
 configs = Config()
 
-configs = Configs()
+
+@dataclass
+class KnockoutResults:
+    model: cobra.Model
+    gene_ind2genes: set[str]
+    genes_with_metabolic_effects: list[str]
+    flux_solution: pd.DataFrame
+    flux_solution_ratios: pd.DataFrame
+    flux_solution_diffs: pd.DataFrame
 
 
 def _perform_knockout(
@@ -47,7 +55,7 @@ def knock_out_simulation(
     reference_flux_filepath: Union[str, Path, None],
     test_all: bool,
     pars_flag: bool,
-):
+) -> KnockoutResults:
     reference_solution: cobra.Solution
     if reference_flux_filepath is not None:
         reference_flux_filepath: Path = Path(reference_flux_filepath)
@@ -137,7 +145,7 @@ def knock_out_simulation(
     flux_solution_ratios = flux_solution.div(model_opt["fluxes"], axis=0)
     flux_solution_diffs = flux_solution.sub(model_opt["fluxes"], axis=0)
 
-    return (
+    return KnockoutResults(
         model,
         gene_ind2genes,
         genes_with_metabolic_effects,
@@ -469,15 +477,7 @@ def main(argv):
         )
         drug_db = pd.read_csv(reformatted_drug_file, sep="\t")
 
-    # Knock Out Simulation
-    (
-        model,
-        gene_ind2genes,
-        has_effects_gene,
-        fluxsolution,
-        flux_solution_ratios,
-        flux_solution_diffs,
-    ) = knock_out_simulation(
+    knockout_results: KnockoutResults = knock_out_simulation(
         model=cobra_model,
         inhibitors_filepath=inhibitors_file,
         drug_db=drug_db,
@@ -486,18 +486,18 @@ def main(argv):
         pars_flag=pars_flag,
     )
 
-    flux_solution_diffs.to_csv(os.path.join(output_dir, "flux_diffs_KO.csv"))
-    flux_solution_ratios.to_csv(os.path.join(output_dir, "flux_ratios_KO.csv"))
+    knockout_results.flux_solution_diffs.to_csv(output_dir / "flux_diffs_KO.csv")
+    knockout_results.flux_solution_ratios.to_csv(output_dir / "flux_ratios_KO.csv")
 
     gene_pairs_down = create_gene_pairs(
-        configs.data_dir,
-        model,
-        gene_ind2genes,
-        fluxsolution,
-        flux_solution_ratios,
-        flux_solution_diffs,
-        has_effects_gene,
-        disease_genes=disease_down_file,
+        data_dir=configs.data_dir,
+        model=knockout_results.model,
+        gene_ind2genes=knockout_results.gene_ind2genes,
+        flux_solution=knockout_results.flux_solution,
+        flux_solution_ratios=knockout_results.flux_solution_ratios,
+        flux_solution_diffs=knockout_results.flux_solution_diffs,
+        has_effects_gene=knockout_results.genes_with_metabolic_effects,
+        disease_genes_filename=disease_down_filename,
     )
 
     gene_pairs_down.to_csv(
@@ -506,14 +506,14 @@ def main(argv):
     )
 
     gene_pairs_up = create_gene_pairs(
-        configs.data_dir,
-        model,
-        gene_ind2genes,
-        fluxsolution,
-        flux_solution_ratios,
-        flux_solution_diffs,
-        has_effects_gene,
-        disease_genes=disease_up_file,
+        data_dir=configs.data_dir,
+        model=knockout_results.model,
+        gene_ind2genes=knockout_results.gene_ind2genes,
+        flux_solution=knockout_results.flux_solution,
+        flux_solution_ratios=knockout_results.flux_solution_ratios,
+        flux_solution_diffs=knockout_results.flux_solution_diffs,
+        has_effects_gene=knockout_results.genes_with_metabolic_effects,
+        disease_genes_filename=disease_up_filename,
     )
     gene_pairs_up.to_csv(
         os.path.join(output_dir, f"{context}_Gene_Pairs_Inhi_Fratio_UP.txt"),
