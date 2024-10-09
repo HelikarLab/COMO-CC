@@ -2,7 +2,6 @@
 
 import argparse
 import re
-import sys
 from enum import Enum
 from pathlib import Path
 from typing import Optional
@@ -174,7 +173,7 @@ def rnaseq_gen(
     )
 
 
-def main(argv):
+def main():
     """
     Generate a list of active and high-confidence genes from a counts matrix using a user defined
     at normalization-technique at /work/data/results/<context name>/rnaseq_<context_name>.csv
@@ -321,8 +320,7 @@ def main(argv):
     elif re.search("zfpkm", technique.lower()):
         technique = "zfpkm"
     else:
-        print("Normalization-filtration technique not recognized. Must be 'tpm-quantile', 'cpm', or 'zfpkm'.")
-        sys.exit()
+        raise ValueError("Technique not recognized. Must be 'tpm-quantile', 'cpm', or 'zfpkm'.")
 
     if int(quantile) > 100 or int(quantile) < 1:
         print("Quantile must be between 1 - 100")
@@ -345,4 +343,4 @@ def main(argv):
 
 
 if __name__ == "__main__":
-    main(sys.argv[1:])
+    main()

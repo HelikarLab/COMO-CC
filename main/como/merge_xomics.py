@@ -554,7 +554,7 @@ def merge_xomics(
     )
 
 
-def main(argv):
+def main():
     """
     Merge expression tables of multiple sources, (RNA-seq, proteomics) into one list
     User can specify the number of sources with an active gene in order for it to be considered active in the model.
@@ -770,15 +770,12 @@ def main(argv):
         try:
             expression_requirement = int(expression_requirement)
             if int(expression_requirement) < 1:
-                print("Expression requirement must be at least 1!")
-                sys.exit(1)
+                raise ValueError("Expression requirement must be at least 1!")
         except ValueError:
-            print("Expression requirement must be able to be converted to an integer!")
-            sys.exit(1)
+            raise ValueError("Expression requirement must be able to be converted to an integer!")
 
     if adjust_method not in ["progressive", "regressive", "flat", "custom"]:
-        print("Adjust method must be either 'progressive', 'regressive', 'flat', or 'custom'")
-        sys.exit(1)
+        raise ValueError("Adjust method must be either 'progressive', 'regressive', 'flat', or 'custom'")
 
     handle_context_batch(
         trnaseq_file=trnaseq_file,
@@ -802,7 +799,4 @@ def main(argv):
 
 
 if __name__ == "__main__":
-    main(sys.argv[1:])
-    # df = pd.read_csv("/Users/joshl/PycharmProjects/MADRID/main/data/results/naiveB/merged_naiveB.csv")
-    # x = get_transcriptmoic_details(df)
-    # print("DONE")
+    main()

@@ -318,7 +318,7 @@ def rnaseq_preprocess(context_names: str, mode: str, input_format: Input, taxon_
     handle_context_batch(context_names=context_names, mode=mode, input_format=input_format, taxon_id=taxon_id, provided_matrix_file=matrix_file)
 
 
-def parse_args(argv):
+def parse_args():
     """
     Parse arguments to rnaseq_preprocess.py, create a gene info files for each provided context at:
     /work/data/results/<context name>/gene_info_<context name>.csv.
@@ -412,8 +412,8 @@ def parse_args(argv):
     return args
 
 
-def main(argv):
-    args = parse_args(argv)
+def main():
+    args = parse_args()
 
     if args.gene_format.upper() in ["ENSEMBL", "ENSEMBLE", "ENSG", "ENSMUSG", "ENSEMBL ID", "ENSEMBL GENE ID"]:
         gene_format_database: Input = Input.ENSEMBL_GENE_ID
@@ -425,10 +425,7 @@ def main(argv):
         gene_format_database: Input = Input.GENE_ID
 
     else:  # provided invalid gene format
-        print("Gene format (--gene_format) is invalid")
-        print("Accepts 'Ensembl', 'Entrez', and 'HGNC symbol'")
-        print(f"You provided: {args.gene_format}")
-        sys.exit()
+        raise ValueError(f"Gene format (--gene_format) is invalid; accepts 'Ensembl', 'Entrez', and 'HGNC symbol'; provided: {args.gene_format}")
 
     # handle species alternative ids
     if isinstance(args.taxon_id, str):
@@ -437,14 +434,12 @@ def main(argv):
         elif args.taxon_id.upper() == "MOUSE" or args.taxon_id.upper() == "MUS MUSCULUS":
             taxon_id = Taxon.MUS_MUSCULUS
         else:
-            print("--taxon-id must be either an integer, or accepted string ('mouse', 'human')")
-            sys.exit(1)
+            raise ValueError(f"Taxon id (--taxon-id) is invalid; accepts 'human', 'mouse'; provided: {args.taxon_id}")
 
     elif isinstance(args.taxon_id, int):
         taxon_id = args.taxon_id
     else:
-        print("--taxon-id must be either an integer, or accepted string ('mouse', 'human')")
-        sys.exit(1)
+        raise ValueError(f"Taxon id (--taxon-id) is invalid; accepts 'human', 'mouse'; provided: {args.taxon_id}")
 
     # use mutually exclusive flag to set mode which tells which files to generate
     if args.provide_matrix:
@@ -452,8 +447,7 @@ def main(argv):
     elif args.make_matrix:
         mode = "make"
     else:
-        print("--provide-matrix or --create-matrix must be set")
-        sys.exit(1)
+        raise ValueError("Must set either --provide-matrix or --make-matrix")
 
     handle_context_batch(
         context_names=args.context_names,
@@ -465,4 +459,4 @@ def main(argv):
 
 
 if __name__ == "__main__":
-    main(sys.argv[1:])
+    main()

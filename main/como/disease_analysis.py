@@ -1,7 +1,6 @@
 #!/usr/bin/python3
 import argparse
 import json
-import sys
 from pathlib import Path
 
 import pandas as pd
@@ -40,8 +39,7 @@ def get_rnaseq_diff_gene_exp(config_filepath, disease_name, context_name, taxon_
     if count_matrix_path.exists():
         print("Count Matrix File is at ", count_matrix_path)
     else:
-        print(f"No count matrix found at {count_matrix_path}. Please make sure file is in the correct location " f"with the correct name.")
-        sys.exit()
+        raise FileNotFoundError(f"Count Matrix File not found at {count_matrix_path}")
 
     diff_exp_df = DGEio.call_function("DGE_main", count_matrix_path, config_filepath, context_name, disease_name)
     diff_exp_df = ro.conversion.rpy2py(diff_exp_df)
@@ -109,7 +107,7 @@ def write_outputs(diff_exp_df, gse_id, context_name, disease_name, target_path):
         json.dump(files_dict, fp)
 
 
-def main(argv):
+def main():
     target_file = "targets.txt"
 
     parser = argparse.ArgumentParser(
@@ -165,11 +163,9 @@ def main(argv):
         elif taxon_id.upper() == "MOUSE" or taxon_id.upper() == "MUS MUSCULUS":
             taxon_id = 10090
         else:
-            print('--taxon-id must be either an integer, or accepted string ("mouse", "human")')
-            sys.exit()
+            raise ValueError("taxon_id must be either an integer, or accepted string ('mouse', 'human')")
     elif not isinstance(taxon_id, int):
-        print('--taxon-id must be either an integer, or accepted string ("mouse", "human")')
-        sys.exit()
+        raise ValueError("taxon_id must be either an integer, or accepted string ('mouse', 'human')")
 
     sheet_names = xl.sheet_names
     for disease_name in sheet_names:
@@ -179,4 +175,4 @@ def main(argv):
 
 
 if __name__ == "__main__":
-    main(sys.argv[1:])
+    main()

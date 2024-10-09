@@ -1,7 +1,6 @@
 import argparse
 import collections
 import re
-import sys
 from enum import Enum
 from pathlib import Path
 from typing import Optional
@@ -20,8 +19,6 @@ from troppo.methods.reconstruction.tINIT import tINIT, tINITProperties
 
 from como.como_utilities import Compartments, split_gene_expression_data, stringlist_to_list
 from como.project import Config
-
-sys.setrecursionlimit(1500)  # for re.search
 
 
 def correct_bracket(rule: str, name: str) -> str:
@@ -659,7 +656,7 @@ def print_filetype_help():
     print("Unsupported model format. Current support is for: 'xml', 'mat', and 'json'." "Or use multiple with: 'xml mat json'")
 
 
-def parse_args(argv):
+def parse_args():
     parser = argparse.ArgumentParser(
         prog="create_context_specific_model.py",
         description="Seed a context-specific model from a list of expressed genes, a reference",
@@ -785,11 +782,11 @@ def parse_args(argv):
     return args
 
 
-def main(argv):
+def main():
     """
     Seed a context-specific model from a list of expressed genes, a reference
     """
-    args = parse_args(argv)
+    args = parse_args()
 
     context_name: str = args.context_name
     reference_model: Path = Path(args.modelfile)
@@ -866,88 +863,52 @@ def main(argv):
     exclude_rxns = []
     if exclude_rxns_filepath:
         exclude_rxns_filepath: Path = Path(exclude_rxns_filepath)
-        try:
-            print(f"Reading {exclude_rxns_filepath} for exclude reactions")
-            if exclude_rxns_filepath.suffix == ".csv":
-                df = pd.read_csv(exclude_rxns_filepath, header=0)
-            elif exclude_rxns_filepath.suffix == ".xlsx" or exclude_rxns_filepath.suffix == ".xls":
-                df = pd.read_excel(exclude_rxns_filepath, header=0)
-            else:
-                print("--exclude-reactions-file must be a path to a csv or xlsx file with one column.")
-                print(
-                    "This column should be populated with reaction ids in the reference model which will not be "
-                    + "included in the context specific model, regardless of omics expression"
-                )
-                sys.exit()
+        if not exclude_rxns_filepath.exists():
+            raise FileNotFoundError(f"Exclude reactions file not found at {exclude_rxns_filepath}")
+        if exclude_rxns_filepath.suffix not in [".csv", ".xlsx", ".xls"]:
+            raise FileNotFoundError(f"Exclude reactions file not found! Must be a csv or Excel file. Searching for: {exclude_rxns_filepath}")
 
-            exclude_rxns = df["Abbreviation"].tolist()
+        print(f"Reading {exclude_rxns_filepath} for exclude reactions")
+        df = pd.DataFrame()
+        if exclude_rxns_filepath.suffix == ".csv":
+            df = pd.read_csv(exclude_rxns_filepath, header=0)
+        elif exclude_rxns_filepath.suffix == ".xlsx" or exclude_rxns_filepath.suffix == ".xls":
+            df = pd.read_excel(exclude_rxns_filepath, header=0)
+        if "Abbreviation" not in df.columns:
+            raise ValueError("Exclude reactions file must have a column called 'Abbreviation'")
 
-        except FileNotFoundError:
-            print("--exclude-reactions-file must be a path to a csv or xlsx file with one column.")
-            print(
-                "This column should be populated with reaction ids in the reference model which will not be "
-                + "included in the context specific model, regardless of omics expression"
-            )
-            sys.exit()
-        except BaseException:
-            print("exclude reactions file must be a csv or xlsx with one column.")
-            print(
-                "This column should be populated with reaction ids in the reference model which will not be "
-                + "included in the context specific model, regardless of omics expression"
-            )
-            sys.exit()
+        exclude_rxns = df["Abbreviation"].tolist()
 
     force_rxns = []
     if force_rxns_filepath:
         force_rxns_filepath: Path = Path(force_rxns_filepath)
-        try:
-            print(f"Force Reactions: {force_rxns_filepath}")
-            if force_rxns_filepath.suffix == ".csv":
-                df = pd.read_csv(force_rxns_filepath, header=0)
-            elif force_rxns_filepath.suffix == ".xlsx" or force_rxns_filepath.suffix == ".xls":
-                df = pd.read_excel(force_rxns_filepath, header=0)
-            else:
-                print("--force-reactions-file must be a path to a csv or xlsx file with one column.")
-                print(
-                    "This column should be populated with reaction ids in the reference model which will not be "
-                    + "included in the context specific model, regardless of omics expression"
-                )
-                sys.exit()
+        if not force_rxns_filepath.exists():
+            raise FileNotFoundError(f"Force reactions file not found at {force_rxns_filepath}")
+        if force_rxns_filepath.suffix not in [".csv", ".xlsx", ".xls"]:
+            raise FileNotFoundError(f"Force reactions file not found! Must be a csv or Excel file. Searching for: {force_rxns_filepath}")
+        print(f"Force Reactions: {force_rxns_filepath}")
 
-            force_rxns = df["Abbreviation"].tolist()
+        df = pd.DataFrame()
+        if force_rxns_filepath.suffix == ".csv":
+            df = pd.read_csv(force_rxns_filepath, header=0)
+        elif force_rxns_filepath.suffix == ".xlsx" or force_rxns_filepath.suffix == ".xls":
+            df = pd.read_excel(force_rxns_filepath, header=0)
+        if "Abbreviation" not in df.columns:
+            raise ValueError("Force reactions file must have a column called 'Abbreviation'")
+        force_rxns = df["Abbreviation"].tolist()
 
-        except FileNotFoundError:
-            print("--force-reactions-file must be a path to a csv or xlsx file with one column.")
-            print(
-                "This column should be populated with reaction ids in the reference model which will be force "
-                + "included in the context specific model, regardless of omics expression (unless the reaction "
-                + "causes the model to be infeasible)."
-            )
-            sys.exit()
-        except BaseException:
-            print("force reactions file must be a csv or xlsx with one column.")
-            print(
-                "This column should be populated with reaction ids in the reference model which will be force "
-                + "included in the context specific model, regardless of omics expression (unless the reaction "
-                + "causes the model to be infeasible)."
-            )
-            sys.exit()
     config = Config()
 
     # Assert output types are valid
     for output_type in output_filetypes:
         if output_type not in ["xml", "mat", "json"]:
-            print(f"Output file type {output_type} not recognized.")
-            print("Output file types must be one of the following: xml, mat, json")
-            sys.exit(1)
+            raise ValueError("Output file type must be one of: xml, mat, json")
 
     if recon_alg not in ["FASTCORE", "GIMME", "IMAT"]:
-        print(f"Algorithm {recon_alg} not supported. Please use one of: GIMME, FASTCORE, or IMAT")
-        sys.exit(2)
+        raise ValueError("Recon algorithm must be one of: FASTCORE, GIMME, IMAT")
 
     if solver not in ["GUROBI", "GLPK"]:
-        print(f"Solver {solver} not supported. Please use 'GLPK' or 'GUROBI'")
-        sys.exit(2)
+        raise ValueError("Solver must be one of: GUROBI, GLPK")
 
     print(f"Creating '{context_name}' model using '{recon_alg}' reconstruction and '{solver}' solver")
     context_model, core_list, infeas_df = _create_context_specific_model(
@@ -993,4 +954,4 @@ def main(argv):
 
 
 if __name__ == "__main__":
-    main(sys.argv[1:])
+    main()
