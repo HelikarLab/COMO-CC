@@ -1,27 +1,26 @@
-#!/usr/bin/python3
-
-from enum import Enum
+import argparse
+import collections
 import os
 import re
 import sys
+from enum import Enum
+from pathlib import Path
 from typing import Optional
+from warnings import warn
+
 import cobra
-from cobra import Model
-import argparse
-import collections
 import numpy as np
 import pandas as pd
-from pathlib import Path
-from warnings import warn
-from cobra.flux_analysis import pfba
 from cobamp.wrappers import COBRAModelObjectReader
+from cobra import Model
+from cobra.flux_analysis import pfba
+from troppo.methods.reconstruction.fastcore import FASTcore, FastcoreProperties
+from troppo.methods.reconstruction.gimme import GIMME, GIMMEProperties
 from troppo.methods.reconstruction.imat import IMAT, IMATProperties
 from troppo.methods.reconstruction.tINIT import tINIT, tINITProperties
-from troppo.methods.reconstruction.gimme import GIMME, GIMMEProperties
-from troppo.methods.reconstruction.fastcore import FASTcore, FastcoreProperties
 
+from como.como_utilities import Compartments, split_gene_expression_data, stringlist_to_list
 from como.project import Config
-from como.como_utilities import stringlist_to_list, split_gene_expression_data, Compartments
 
 sys.setrecursionlimit(1500)  # for re.search
 
